@@ -19,13 +19,13 @@ export function MetricCard({ label, value, hint, tone = 'neutral', unit }: Metri
     good: 'ring-1 ring-emerald-100',
     warn: 'ring-1 ring-amber-100',
     bad: 'ring-1 ring-rose-100',
-    highlight: 'ring-1 ring-sky-100 bg-sky-50/40',
+    highlight: 'ring-1 ring-sky-100 bg-primarySoft',
   }[tone];
 
   return (
-    <div className={`panel p-4 transition hover:-translate-y-0.5 hover:shadow-lg ${borderClass}`}>
+    <div className={`panel p-4 transition hover:-translate-y-0.5 hover:shadow-soft ${borderClass}`}>
       <div className="text-xs font-medium text-muted">{label}</div>
-      <div className={`mt-2 flex items-end gap-1 text-2xl font-semibold tabular-nums ${toneClass}`}>
+      <div className={`mt-2 flex items-end gap-1 text-[28px] font-semibold tabular-nums ${toneClass}`}>
         <span>{value}</span>
         {unit ? <span className="pb-1 text-xs font-medium text-muted">{unit}</span> : null}
       </div>

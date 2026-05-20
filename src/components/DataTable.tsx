@@ -73,13 +73,13 @@ export function DataTable<T>({ title, rows, columns, exportName, maxHeight = '52
       </div>
       <div className="overflow-auto" style={{ maxHeight }}>
         <table className="min-w-full border-separate border-spacing-0 text-sm">
-          <thead className="sticky top-0 z-10 bg-slate-100">
+          <thead className="sticky top-0 z-10 bg-[#f1f5fb]">
             <tr>
               {columns.map((column, index) => (
                 <th
                   key={column.key}
                   className={`border-b border-line px-3 py-3 text-left text-xs font-semibold text-slate-600 ${column.numeric ? 'text-right' : ''} ${
-                    index === 0 ? 'sticky left-0 z-20 bg-slate-100' : ''
+                    index === 0 ? 'sticky left-0 z-20 bg-[#f1f5fb]' : ''
                   }`}
                 >
                   <button type="button" className={`inline-flex items-center gap-1 ${column.numeric ? 'justify-end' : ''}`} onClick={() => toggleSort(column.key)}>
@@ -92,7 +92,7 @@ export function DataTable<T>({ title, rows, columns, exportName, maxHeight = '52
           </thead>
           <tbody>
             {visibleRows.map((row, rowIndex) => (
-              <tr key={rowIndex} className={onRowClick ? 'cursor-pointer hover:bg-sky-50/70' : 'hover:bg-slate-50/80'} onClick={() => onRowClick?.(row)}>
+              <tr key={rowIndex} className={onRowClick ? 'cursor-pointer hover:bg-primarySoft' : 'hover:bg-slate-50/80'} onClick={() => onRowClick?.(row)}>
                 {columns.map((column, index) => (
                   <td
                     key={column.key}

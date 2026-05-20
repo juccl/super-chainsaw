@@ -4,14 +4,19 @@ export default {
   theme: {
     extend: {
       colors: {
-        ink: '#172033',
-        muted: '#64748b',
-        line: '#e2e8f0',
+        ink: '#1f2a37',
+        muted: '#7b8794',
+        line: '#e6eaf0',
         panel: '#ffffff',
-        canvas: '#f7f9fc',
+        canvas: '#f4f7fb',
+        sidebar: '#f8fafc',
+        primary: '#2f7bf6',
+        primarySoft: '#e8f1ff',
+        mintSoft: '#eaf8f2',
       },
       boxShadow: {
-        soft: '0 8px 24px rgba(15, 23, 42, 0.06)',
+        soft: '0 8px 24px rgba(31, 42, 55, 0.06)',
+        card: '0 2px 8px rgba(31, 42, 55, 0.06)',
       },
     },
   },

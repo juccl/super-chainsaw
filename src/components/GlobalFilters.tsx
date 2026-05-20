@@ -80,10 +80,10 @@ export function GlobalFilters({ rows, filters, onChange }: GlobalFiltersProps) {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="text-sm text-slate-700">当前筛选：{summaryText}</div>
           <div className="flex items-center gap-2">
-            <button type="button" className="rounded-md border border-line px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50" onClick={clearAll}>
+            <button type="button" className="rounded-md border border-line px-3 py-1 text-xs text-slate-600 hover:bg-slate-50" onClick={clearAll}>
               清空筛选
             </button>
-            <button type="button" className="rounded-md border border-line px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50" onClick={() => setPanelCollapsed(false)}>
+            <button type="button" className="rounded-md border border-line px-3 py-1 text-xs text-slate-600 hover:bg-slate-50" onClick={() => setPanelCollapsed(false)}>
               展开筛选
             </button>
           </div>
@@ -93,20 +93,20 @@ export function GlobalFilters({ rows, filters, onChange }: GlobalFiltersProps) {
   }
 
   return (
-    <section className="panel mb-4 p-4">
+    <section className="panel mb-4 bg-white p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-sm font-semibold text-ink">全局筛选</h2>
-          <p className="text-xs text-muted">支持搜索、多选、全选和折叠，筛选器按字段 AND 联动。</p>
+          <h2 className="section-title">筛选工具栏</h2>
+          <p className="section-subtitle">支持搜索、多选、全选和折叠，筛选器按字段 AND 联动。</p>
         </div>
         <div className="flex items-center gap-2">
-          <button type="button" className="rounded-md border border-line px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50" onClick={selectAllFields}>
+          <button type="button" className="rounded-md border border-line px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50" onClick={selectAllFields}>
             全选全部
           </button>
-          <button type="button" className="rounded-md border border-line px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50" onClick={clearAll}>
+          <button type="button" className="rounded-md border border-line px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50" onClick={clearAll}>
             清空筛选
           </button>
-          <button type="button" className="rounded-md border border-line px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50" onClick={() => setPanelCollapsed(true)}>
+          <button type="button" className="rounded-md border border-line px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50" onClick={() => setPanelCollapsed(true)}>
             收起筛选
           </button>
         </div>
@@ -129,7 +129,7 @@ export function GlobalFilters({ rows, filters, onChange }: GlobalFiltersProps) {
           };
 
           return (
-            <div key={field.key} className="rounded-md border border-slate-200 bg-slate-50/45 p-3">
+            <div key={field.key} className="rounded-lg border border-line bg-slate-50/40 p-3">
               <div className="mb-2 flex items-start justify-between gap-2">
                 <div>
                   <div className="text-xs font-semibold text-slate-700">{title}</div>
@@ -156,7 +156,7 @@ export function GlobalFilters({ rows, filters, onChange }: GlobalFiltersProps) {
 
               {collapsed ? null : (
                 <>
-                  <label className="mb-2 flex h-8 items-center gap-1.5 rounded-md border border-line bg-white px-2">
+                    <label className="mb-2 flex h-8 items-center gap-1.5 rounded-md border border-line bg-white px-2 shadow-sm">
                     <Search size={13} className="text-slate-400" />
                     <input
                       value={query}
@@ -172,10 +172,10 @@ export function GlobalFilters({ rows, filters, onChange }: GlobalFiltersProps) {
                   </label>
 
                   <div className="mb-2 flex items-center gap-2">
-                    <button type="button" className="rounded border border-line px-2 py-0.5 text-xs text-slate-600 hover:bg-white" onClick={selectAllVisible}>
+                    <button type="button" className="rounded border border-line bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50" onClick={selectAllVisible}>
                       全选
                     </button>
-                    <button type="button" className="rounded border border-line px-2 py-0.5 text-xs text-slate-600 hover:bg-white" onClick={() => setField(field.key, [])}>
+                    <button type="button" className="rounded border border-line bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50" onClick={() => setField(field.key, [])}>
                       清空
                     </button>
                   </div>

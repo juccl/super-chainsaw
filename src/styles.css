@@ -9,8 +9,8 @@
 body {
   margin: 0;
   min-width: 320px;
-  background: #f6f8fb;
-  color: #172033;
+  background: #f4f7fb;
+  color: #1f2a37;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -22,15 +22,27 @@ select {
 
 @layer components {
   .panel {
-    @apply rounded-xl border border-line bg-panel shadow-soft;
+    @apply rounded-lg border border-line bg-panel shadow-sm;
   }
 
   .control {
-    @apply h-10 rounded-md border border-line bg-white px-3 text-sm outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100;
+    @apply h-9 rounded-md border border-line bg-white px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-blue-100;
   }
 
   .icon-button {
-    @apply inline-flex h-10 w-10 items-center justify-center rounded-md border border-line bg-white text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40;
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-md border border-line bg-white text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .pill {
+    @apply inline-flex h-8 items-center rounded-full border border-line bg-white px-3 text-xs font-medium text-slate-700;
+  }
+
+  .section-title {
+    @apply text-base font-semibold text-ink;
+  }
+
+  .section-subtitle {
+    @apply mt-1 text-sm text-muted;
   }
 
   .filter-scroll {
