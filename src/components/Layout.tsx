@@ -1,13 +1,16 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { Bell, Search } from 'lucide-react';
-import { Filters, StandardRow, UploadRecord } from '../types';
+import { Filters, UploadRecord } from '../types';
 import { Sidebar } from './Sidebar';
 
-export type PageKey = 'overview' | 'channel';
+export type PageKey = 'overview' | 'personal' | 'channel-detail' | 'channel-breakdown' | 'fee-calculator';
 
 const pageMeta: Record<PageKey, { label: string; description: string }> = {
-  overview: { label: '经营总览', description: '查看钢琴 SKU 大盘与个人经营对比表现' },
-  channel: { label: '渠道诊断', description: '按渠道/渠道ID观察营期间波动与渠道质量' },
+  overview: { label: '业务经营总览', description: '查看当前 SKU 的整体经营表现，观察营期之间的规模、转化与到完课波动。' },
+  personal: { label: '个人经营总览', description: '查看个人 / 渠道归属维度的经营表现，并与当前筛选后的大盘表现进行对比。' },
+  'channel-detail': { label: '渠道经营明细｜板块一', description: '观察 D4～D10 单日转化率、当期成交占比与追单占比波动。' },
+  'channel-breakdown': { label: '渠道经营明细｜板块二', description: '按渠道归属人 / 渠道号 / 分类拆解封板转化表现与贡献结构。' },
+  'fee-calculator': { label: '费比测算工具', description: '模拟不同经营参数组合下的费比、ROI、R值与成交产出。' },
 };
 
 interface LayoutProps {
@@ -16,11 +19,29 @@ interface LayoutProps {
   children: ReactNode;
   rowCount: number;
   upload?: UploadRecord;
+  overviewSidebarUpload?: {
+    fileName?: string;
+    uploadedAt?: string;
+    rawRows?: number;
+    cleanedRows?: number;
+    filteredRows?: number;
+  };
+  channelSidebarUpload?: {
+    fileName?: string;
+    uploadedAt?: string;
+    rawRows?: number;
+    cleanedRows?: number;
+    filteredRows?: number;
+  };
+  overviewFieldStatus: string;
+  channelFieldStatus: string;
   filters: Filters;
   collapsed: boolean;
   onToggleCollapsed: () => void;
-  onUpload: (payload: { upload: UploadRecord; rows: StandardRow[] }) => void;
-  onClearData: () => void;
+  onUploadOverview: (file: File) => void;
+  onUploadChannel: (file: File) => void;
+  onClearOverviewData: () => void;
+  onClearChannelData: () => void;
 }
 
 export function Layout({
@@ -29,37 +50,60 @@ export function Layout({
   children,
   rowCount,
   upload,
+  overviewSidebarUpload,
+  channelSidebarUpload,
+  overviewFieldStatus,
+  channelFieldStatus,
   filters,
   collapsed,
   onToggleCollapsed,
-  onUpload,
-  onClearData,
+  onUploadOverview,
+  onUploadChannel,
+  onClearOverviewData,
+  onClearChannelData,
 }: LayoutProps) {
+  const [chinaNow, setChinaNow] = useState<Date>(() => new Date());
+  useEffect(() => {
+    const timer = window.setInterval(() => setChinaNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const activeFilterCount =
     filters.channel.length +
     filters.channelId.length +
     filters.channelOwner.length +
     filters.productType.length +
     filters.campaign.length;
+
+  const greeting = getChinaGreeting(chinaNow);
+  const showGreeting = page === 'overview';
+
   return (
     <div className="min-h-screen bg-canvas">
       <Sidebar
         page={page}
-        upload={upload}
+        overviewUpload={overviewSidebarUpload}
+        channelUpload={channelSidebarUpload}
+        overviewFieldStatus={overviewFieldStatus}
+        channelFieldStatus={channelFieldStatus}
         collapsed={collapsed}
         onToggleCollapsed={onToggleCollapsed}
         onPageChange={onPageChange}
-        onUpload={onUpload}
-        onClearData={onClearData}
+        onUploadOverview={onUploadOverview}
+        onUploadChannel={onUploadChannel}
+        onClearOverviewData={onClearOverviewData}
+        onClearChannelData={onClearChannelData}
       />
       <main className={collapsed ? 'lg:pl-20' : 'lg:pl-64'}>
         <header className="sticky top-0 z-20 border-b border-line bg-canvas/95 px-4 py-4 backdrop-blur lg:px-7">
-          <div className="panel border-none bg-white p-4 shadow-card">
+          <div className="panel border-none bg-white p-3 shadow-card">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h1 className="text-4xl font-semibold text-ink">晚上好</h1>
-                <p className="mt-1 text-base text-muted">{pageMeta[page].description}</p>
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                <h1 className="text-3xl font-semibold text-ink">{showGreeting ? greeting : pageMeta[page].label}</h1>
+                <p className="mt-1 text-sm text-muted">
+                  {showGreeting ? '查看今日经营表现与营期趋势波动。' : pageMeta[page].description}
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                   <span className="pill">总计：{rowCount.toLocaleString('zh-CN')} 行</span>
                   <span className="pill border-emerald-200 bg-mintSoft text-emerald-700">筛选：{activeFilterCount}</span>
                 </div>
@@ -73,12 +117,8 @@ export function Layout({
                 </button>
               </div>
             </div>
-            <p className="mt-3 text-xs text-muted">
-              {upload?.fileName ? `当前文件：${upload.fileName}` : '当前未上传业务数据表'} · 最近更新{' '}
-              {upload?.uploadedAt ? new Date(upload.uploadedAt).toLocaleString('zh-CN') : '-'}
-            </p>
-            <div className="mt-4 h-1.5 rounded-full bg-gradient-to-r from-[#36a0ff] to-[#6ee7c8]" />
-            <div className="mt-3 flex gap-2 lg:hidden">
+            <div className="mt-3 h-1 rounded-full bg-gradient-to-r from-[#36a0ff] to-[#6ee7c8]" />
+            <div className="mt-2 flex gap-2 lg:hidden">
               {(Object.keys(pageMeta) as PageKey[]).map((key) => (
                 <button
                   key={key}
@@ -96,4 +136,19 @@ export function Layout({
       </main>
     </div>
   );
+}
+
+function getChinaGreeting(now: Date): string {
+  const hour = Number(
+    new Intl.DateTimeFormat('zh-CN', {
+      timeZone: 'Asia/Shanghai',
+      hour: '2-digit',
+      hour12: false,
+    }).format(now),
+  );
+  if (hour >= 5 && hour <= 10) return '早上好';
+  if (hour >= 11 && hour <= 13) return '中午好';
+  if (hour >= 14 && hour <= 17) return '下午好';
+  if (hour >= 18 && hour <= 23) return '晚上好';
+  return '夜深了';
 }

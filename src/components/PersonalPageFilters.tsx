@@ -4,15 +4,15 @@ import { getFilterOptions } from '../lib/metrics';
 import { readStorage, writeStorage } from '../lib/storage';
 import { Filters, StandardRow } from '../types';
 
-interface GlobalFiltersProps {
+interface PersonalPageFiltersProps {
   rows: StandardRow[];
   filters: Filters;
   onChange: (filters: Filters) => void;
 }
 
 const STORAGE = {
-  panelCollapsed: 'business-dashboard:filters:panel-collapsed-v1',
-  fieldCollapsed: 'business-dashboard:filters:field-collapsed-v1',
+  panelCollapsed: 'business-dashboard:personal-filters:panel-collapsed-v1',
+  fieldCollapsed: 'business-dashboard:personal-filters:field-collapsed-v1',
 };
 
 const fields: Array<{
@@ -37,7 +37,7 @@ const defaultFieldCollapse: FieldCollapseState = {
   campaign: false,
 };
 
-export function GlobalFilters({ rows, filters, onChange }: GlobalFiltersProps) {
+export function PersonalPageFilters({ rows, filters, onChange }: PersonalPageFiltersProps) {
   const [panelCollapsed, setPanelCollapsed] = useState<boolean>(() => normalizeBool(readStorage(STORAGE.panelCollapsed, false), false));
   const [fieldCollapsed, setFieldCollapsed] = useState<FieldCollapseState>(() =>
     normalizeFieldCollapsed(readStorage(STORAGE.fieldCollapsed, defaultFieldCollapse)),
@@ -96,8 +96,8 @@ export function GlobalFilters({ rows, filters, onChange }: GlobalFiltersProps) {
     <section className="panel mb-4 bg-white p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="section-title">筛选工具栏</h2>
-          <p className="section-subtitle">支持搜索、多选、全选和折叠，筛选器按字段 AND 联动。</p>
+          <h2 className="section-title">页面筛选</h2>
+          <p className="section-subtitle">仅作用于个人经营总览页面。</p>
         </div>
         <div className="flex items-center gap-2">
           <button type="button" className="rounded-md border border-line px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50" onClick={selectAllFields}>
@@ -114,98 +114,98 @@ export function GlobalFilters({ rows, filters, onChange }: GlobalFiltersProps) {
 
       <div className="max-h-[420px] overflow-y-auto pr-1 filter-scroll">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {fields.map((field) => {
-          const selected = filters[field.key];
-          const query = queries[field.key] || '';
-          const allOptions = allOptionsByField[field.key];
-          const visibleOptions = query ? allOptions.filter((item) => normalize(item).includes(normalize(query))) : allOptions;
-          const selectedCount = selected.length;
-          const title = selectedCount ? `${field.label}（已选 ${selectedCount} / 共 ${allOptions.length}）` : `${field.label}（全部）`;
-          const collapsed = fieldCollapsed[field.key];
+          {fields.map((field) => {
+            const selected = filters[field.key];
+            const query = queries[field.key] || '';
+            const allOptions = allOptionsByField[field.key];
+            const visibleOptions = query ? allOptions.filter((item) => normalize(item).includes(normalize(query))) : allOptions;
+            const selectedCount = selected.length;
+            const title = selectedCount ? `${field.label}（已选 ${selectedCount} / 共 ${allOptions.length}）` : `${field.label}（全部）`;
+            const collapsed = fieldCollapsed[field.key];
 
-          const selectAllVisible = () => {
-            const union = Array.from(new Set([...selected, ...visibleOptions]));
-            setField(field.key, union);
-          };
+            const selectAllVisible = () => {
+              const union = Array.from(new Set([...selected, ...visibleOptions]));
+              setField(field.key, union);
+            };
 
-          return (
-            <div key={field.key} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-              <div className="mb-2 flex items-start justify-between gap-2">
-                <div>
-                  <div className="text-xs font-semibold text-slate-700">{title}</div>
-                  {collapsed ? <div className="mt-1 text-xs text-slate-500">{buildSelectedSummary(selected)}</div> : null}
+            return (
+              <div key={field.key} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                <div className="mb-2 flex items-start justify-between gap-2">
+                  <div>
+                    <div className="text-xs font-semibold text-slate-700">{title}</div>
+                    {collapsed ? <div className="mt-1 text-xs text-slate-500">{buildSelectedSummary(selected)}</div> : null}
+                  </div>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"
+                    onClick={() => setFieldCollapsed((prev) => ({ ...prev, [field.key]: !prev[field.key] }))}
+                  >
+                    {collapsed ? (
+                      <>
+                        展开
+                        <ChevronDown size={12} />
+                      </>
+                    ) : (
+                      <>
+                        收起
+                        <ChevronUp size={12} />
+                      </>
+                    )}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"
-                  onClick={() => setFieldCollapsed((prev) => ({ ...prev, [field.key]: !prev[field.key] }))}
-                >
-                  {collapsed ? (
-                    <>
-                      展开
-                      <ChevronDown size={12} />
-                    </>
-                  ) : (
-                    <>
-                      收起
-                      <ChevronUp size={12} />
-                    </>
-                  )}
-                </button>
-              </div>
 
-              {collapsed ? null : (
-                <>
+                {collapsed ? null : (
+                  <>
                     <label className="mb-2 flex h-9 items-center gap-1.5 rounded-md border border-slate-300 bg-slate-50 px-2 shadow-sm transition focus-within:border-sky-400 focus-within:bg-white focus-within:ring-2 focus-within:ring-sky-100">
-                    <Search size={13} className="text-slate-400" />
-                    <input
-                      value={query}
-                      onChange={(event) => setQueries((prev) => ({ ...prev, [field.key]: event.target.value }))}
-                      className="w-full border-none bg-transparent text-xs outline-none"
-                      placeholder={`搜索${field.label}`}
-                    />
-                    {query ? (
-                      <button type="button" className="text-slate-400 hover:text-slate-600" onClick={() => setQueries((prev) => ({ ...prev, [field.key]: '' }))}>
-                        <X size={12} />
+                      <Search size={13} className="text-slate-400" />
+                      <input
+                        value={query}
+                        onChange={(event) => setQueries((prev) => ({ ...prev, [field.key]: event.target.value }))}
+                        className="w-full border-none bg-transparent text-xs outline-none"
+                        placeholder={`搜索${field.label}`}
+                      />
+                      {query ? (
+                        <button type="button" className="text-slate-400 hover:text-slate-600" onClick={() => setQueries((prev) => ({ ...prev, [field.key]: '' }))}>
+                          <X size={12} />
+                        </button>
+                      ) : null}
+                    </label>
+
+                    <div className="mb-2 flex items-center gap-2">
+                      <button type="button" className="rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-sky-50" onClick={selectAllVisible}>
+                        全选
                       </button>
-                    ) : null}
-                  </label>
+                      <button type="button" className="rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-sky-50" onClick={() => setField(field.key, [])}>
+                        清空
+                      </button>
+                    </div>
 
-                  <div className="mb-2 flex items-center gap-2">
-                    <button type="button" className="rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-sky-50" onClick={selectAllVisible}>
-                      全选
-                    </button>
-                    <button type="button" className="rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-sky-50" onClick={() => setField(field.key, [])}>
-                      清空
-                    </button>
-                  </div>
-
-                  <div className="max-h-[196px] overflow-y-auto rounded-md border border-slate-200 bg-white p-1.5 filter-scroll">
-                    {visibleOptions.length === 0 ? <div className="px-2 py-1 text-xs text-muted">无匹配项</div> : null}
-                    {visibleOptions.map((option) => {
-                      const active = selected.includes(option);
-                      return (
-                        <label key={option} className="flex h-7 items-center gap-2 rounded px-2 text-xs hover:bg-sky-50">
-                          <input
-                            type="checkbox"
-                            checked={active}
-                            onChange={() =>
-                              setField(
-                                field.key,
-                                active ? selected.filter((item) => item !== option) : [...selected, option],
-                              )
-                            }
-                          />
-                          <span className="truncate">{option}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-            </div>
-          );
-        })}
+                    <div className="max-h-[196px] overflow-y-auto rounded-md border border-slate-200 bg-white p-1.5 filter-scroll">
+                      {visibleOptions.length === 0 ? <div className="px-2 py-1 text-xs text-muted">无匹配项</div> : null}
+                      {visibleOptions.map((option) => {
+                        const active = selected.includes(option);
+                        return (
+                          <label key={option} className="flex h-7 items-center gap-2 rounded px-2 text-xs hover:bg-sky-50">
+                            <input
+                              type="checkbox"
+                              checked={active}
+                              onChange={() =>
+                                setField(
+                                  field.key,
+                                  active ? selected.filter((item) => item !== option) : [...selected, option],
+                                )
+                              }
+                            />
+                            <span className="truncate">{option}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </section>

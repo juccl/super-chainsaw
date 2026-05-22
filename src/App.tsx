@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
+import { DailyInspiration } from './components/DailyInspiration';
 import { GlobalFilters } from './components/GlobalFilters';
 import { Layout, PageKey } from './components/Layout';
 import { EmptyState } from './components/EmptyState';
+import { normalizeUpload } from './lib/dataCleaner';
+import { normalizeChannelDetailUpload, type ChannelDetailRow, type ChannelDetailUploadRecord } from './lib/channelDetail';
+import { parseFile } from './lib/fileParser';
 import { applyFilters, emptyFilters } from './lib/metrics';
 import { readStorage, writeStorage } from './lib/storage';
-import { ChannelDiagnosisPage } from './pages/ChannelDiagnosisPage';
+import { ChannelDetailPage } from './pages/ChannelDetailPage';
+import { FeeCalculatorPage } from './pages/FeeCalculatorPage';
 import { OverviewPage } from './pages/OverviewPage';
+import { PersonalOverviewPage } from './pages/PersonalOverviewPage';
 import { Filters, StandardRow, UploadRecord } from './types';
 
 const ROWS_KEY = 'business-dashboard:single-table-rows';
@@ -13,7 +19,25 @@ const UPLOAD_KEY = 'business-dashboard:single-table-upload';
 const FILTERS_KEY = 'business-dashboard:filters';
 const PAGE_KEY = 'business-dashboard:page';
 const SIDEBAR_KEY = 'business-dashboard:sidebar-collapsed';
-const OWNER_KEY = 'business-dashboard:owner-selection';
+const OWNER_KEY = 'personalCurrentOwnerFilter';
+const LEGACY_OWNER_KEY = 'business-dashboard:owner-selection';
+const CHANNEL_ROWS_KEY = 'channelDetail_cleanedRows';
+const CHANNEL_UPLOAD_KEY = 'channelDetail_uploadedFileInfo';
+const CHANNEL_UPLOAD_LEGACY_KEY = 'channelDetail_uploadedFile';
+const CHANNEL_RAW_ROWS_KEY = 'channelDetail_rawRows';
+const CHANNEL_FIELD_MAPPING_KEY = 'channelDetail_fieldMapping';
+
+function normalizeArray<T>(input: unknown): T[] {
+  return Array.isArray(input) ? (input as T[]) : [];
+}
+
+function normalizeUploadRecord(input: unknown): UploadRecord | undefined {
+  return input && typeof input === 'object' ? (input as UploadRecord) : undefined;
+}
+
+function normalizeChannelUploadRecord(input: unknown): ChannelDetailUploadRecord | undefined {
+  return input && typeof input === 'object' ? (input as ChannelDetailUploadRecord) : undefined;
+}
 
 function normalizeFilters(input: unknown): Filters {
   const fallback = emptyFilters();
@@ -30,7 +54,17 @@ function normalizeFilters(input: unknown): Filters {
 }
 
 function normalizePage(input: unknown): PageKey {
-  return input === 'overview' || input === 'channel' ? input : 'overview';
+  if (
+    input === 'overview' ||
+    input === 'personal' ||
+    input === 'channel-detail' ||
+    input === 'channel-breakdown' ||
+    input === 'fee-calculator'
+  ) {
+    return input;
+  }
+  if (input === 'channel') return 'channel-detail';
+  return 'overview';
 }
 
 function normalizeOwnerSelection(input: unknown): string[] {
@@ -43,24 +77,48 @@ function normalizeBool(input: unknown, fallback = false): boolean {
 
 export default function App() {
   const [page, setPage] = useState<PageKey>(() => normalizePage(readStorage(PAGE_KEY, 'overview')));
-  const [rows, setRows] = useState<StandardRow[]>(() => readStorage(ROWS_KEY, []));
-  const [upload, setUpload] = useState<UploadRecord | undefined>(() => readStorage<UploadRecord | undefined>(UPLOAD_KEY, undefined));
+  const [rows, setRows] = useState<StandardRow[]>(() =>
+    normalizeArray<StandardRow>(readStorage<unknown>(ROWS_KEY, [])),
+  );
+  const [upload, setUpload] = useState<UploadRecord | undefined>(() =>
+    normalizeUploadRecord(readStorage<unknown>(UPLOAD_KEY, undefined)),
+  );
+  const [channelRows, setChannelRows] = useState<ChannelDetailRow[]>(() =>
+    normalizeArray<ChannelDetailRow>(readStorage<unknown>(CHANNEL_ROWS_KEY, [])),
+  );
+  const [channelUpload, setChannelUpload] = useState<ChannelDetailUploadRecord | undefined>(() =>
+    normalizeChannelUploadRecord(
+      readStorage<unknown>(
+        CHANNEL_UPLOAD_KEY,
+        readStorage<unknown>(CHANNEL_UPLOAD_LEGACY_KEY, undefined),
+      ),
+    ),
+  );
+  const [channelRawRows, setChannelRawRows] = useState<unknown[]>(() =>
+    normalizeArray<unknown>(readStorage<unknown>(CHANNEL_RAW_ROWS_KEY, [])),
+  );
   const [filters, setFilters] = useState<Filters>(() => normalizeFilters(readStorage(FILTERS_KEY, emptyFilters())));
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => normalizeBool(readStorage(SIDEBAR_KEY, false), false));
-  const [ownerSelection, setOwnerSelection] = useState<string[]>(() => normalizeOwnerSelection(readStorage(OWNER_KEY, [])));
+  const [ownerSelection, setOwnerSelection] = useState<string[]>(
+    () => normalizeOwnerSelection(readStorage(OWNER_KEY, readStorage(LEGACY_OWNER_KEY, []))),
+  );
   const [message, setMessage] = useState('');
 
   useEffect(() => writeStorage(PAGE_KEY, page), [page]);
   useEffect(() => writeStorage(ROWS_KEY, rows), [rows]);
   useEffect(() => writeStorage(UPLOAD_KEY, upload), [upload]);
+  useEffect(() => writeStorage(CHANNEL_ROWS_KEY, channelRows), [channelRows]);
+  useEffect(() => writeStorage(CHANNEL_UPLOAD_KEY, channelUpload), [channelUpload]);
+  useEffect(() => writeStorage(CHANNEL_RAW_ROWS_KEY, channelRawRows), [channelRawRows]);
+  useEffect(() => writeStorage(CHANNEL_FIELD_MAPPING_KEY, channelUpload?.mapping || null), [channelUpload?.mapping]);
   useEffect(() => writeStorage(FILTERS_KEY, filters), [filters]);
   useEffect(() => writeStorage(SIDEBAR_KEY, sidebarCollapsed), [sidebarCollapsed]);
   useEffect(() => writeStorage(OWNER_KEY, ownerSelection), [ownerSelection]);
 
-  const filteredRows = useMemo(() => applyFilters(rows, filters), [filters, rows]);
-  const showFilters = rows.length > 0;
+  const overviewRows = useMemo(() => applyFilters(rows, filters), [filters, rows]);
+  const showOverviewFilters = rows.length > 0 && page === 'overview';
 
-  const clearData = () => {
+  const clearOverviewData = () => {
     setRows([]);
     setUpload(undefined);
     setFilters(emptyFilters());
@@ -68,24 +126,100 @@ export default function App() {
     setMessage('已清空当前上传数据。');
   };
 
-  const handleUpload = (payload: { upload: UploadRecord; rows: StandardRow[] }) => {
-    setUpload(payload.upload);
-    setRows(payload.rows);
-    setMessage(`已上传 ${payload.upload.fileName}，清洗后 ${payload.upload.cleanedRows} 行参与计算。`);
-    setPage('overview');
+  const clearChannelData = () => {
+    setChannelRows([]);
+    setChannelUpload(undefined);
+    setChannelRawRows([]);
+    if (typeof window !== 'undefined') {
+      [
+        CHANNEL_UPLOAD_KEY,
+        CHANNEL_UPLOAD_LEGACY_KEY,
+        CHANNEL_RAW_ROWS_KEY,
+        CHANNEL_ROWS_KEY,
+        CHANNEL_FIELD_MAPPING_KEY,
+        'channelDetail_filters',
+        'channelDetail_metricCardConfig',
+        'channelDetail_metricCardOrder',
+        'channelDetail_chartConfig',
+        'channelDetail_filterPanelCollapsed',
+        'channelDetail_filterFieldCollapsed',
+      ].forEach((key) => window.localStorage.removeItem(key));
+    }
+    setMessage('已清空页面三独立数据源。');
   };
+
+  const handleOverviewUpload = async (file: File) => {
+    try {
+      const raw = await parseFile(file);
+      const normalized = normalizeUpload(file.name, raw);
+      setUpload(normalized.upload);
+      setRows(normalized.standardRows);
+      setMessage(`已上传 ${normalized.upload.fileName}，清洗后 ${normalized.upload.cleanedRows} 行参与计算。`);
+      setPage('overview');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '文件解析失败');
+    }
+  };
+
+  const handleChannelUpload = async (file: File) => {
+    try {
+      const raw = await parseFile(file);
+      const normalized = normalizeChannelDetailUpload(file.name, raw);
+      setChannelUpload(normalized.upload);
+      setChannelRows(normalized.rows);
+      setChannelRawRows(raw);
+      setMessage(`页面三已上传 ${normalized.upload.fileName}，清洗后 ${normalized.upload.cleanedRows} 行参与计算。`);
+      setPage('channel-detail');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '文件解析失败');
+    }
+  };
+
+  const overviewFieldStatus = (() => {
+    if (!upload?.mapping) return '-';
+    const required: Array<keyof NonNullable<UploadRecord['mapping']>> = ['campaign', 'channelId', 'leads', 'cost', 'day7Gmv'];
+    const hit = required.filter((key) => Boolean(upload.mapping[key])).length;
+    if (hit === required.length) return '已识别';
+    if (hit > 0) return '部分识别';
+    return '未识别';
+  })();
+
+  const channelFieldStatus = (() => {
+    if (!channelUpload?.mapping) return '-';
+    const required: Array<keyof NonNullable<ChannelDetailUploadRecord['mapping']>> = [
+      'campaign',
+      'owner',
+      'channelId',
+      'category',
+      'leads',
+      'cost',
+      'd4gmv',
+      'd7gmv',
+      'd10gmv',
+    ];
+    const hit = required.filter((key) => Boolean(channelUpload.mapping[key])).length;
+    if (hit === required.length) return '已识别';
+    if (hit > 0) return '部分识别';
+    return '未识别';
+  })();
 
   return (
     <Layout
       page={page}
       onPageChange={setPage}
-      rowCount={filteredRows.length}
+      rowCount={page === 'overview' ? overviewRows.length : page === 'channel-detail' || page === 'channel-breakdown' ? channelRows.length : rows.length}
       upload={upload}
+      overviewSidebarUpload={upload}
+      channelSidebarUpload={channelUpload}
+      overviewFieldStatus={overviewFieldStatus}
+      channelFieldStatus={channelFieldStatus}
       filters={filters}
       collapsed={sidebarCollapsed}
       onToggleCollapsed={() => setSidebarCollapsed((prev) => !prev)}
-      onUpload={handleUpload}
-      onClearData={clearData}
+      onUploadOverview={handleOverviewUpload}
+      onUploadChannel={handleChannelUpload}
+      onClearOverviewData={clearOverviewData}
+      onClearChannelData={clearChannelData}
     >
       {message ? (
         <div className="mb-4 rounded-md border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
@@ -93,20 +227,44 @@ export default function App() {
           <button type="button" className="ml-3 underline" onClick={() => setMessage('')}>关闭</button>
         </div>
       ) : null}
-      {showFilters ? <GlobalFilters rows={rows} filters={filters} onChange={setFilters} /> : null}
-      {rows.length === 0 ? (
+      {showOverviewFilters ? <DailyInspiration /> : null}
+      {showOverviewFilters ? <GlobalFilters rows={rows} filters={filters} onChange={setFilters} /> : null}
+      {rows.length === 0 && page !== 'fee-calculator' && page !== 'channel-detail' && page !== 'channel-breakdown' ? (
         <EmptyState />
       ) : (
         <>
           {page === 'overview' ? (
             <OverviewPage
-              rows={filteredRows}
+              rows={overviewRows}
               upload={upload}
               ownerSelection={ownerSelection}
               onOwnerSelectionChange={setOwnerSelection}
+              onApplyFavoriteOwnersToGlobalFilter={(owners) =>
+                setFilters((prev) => ({
+                  ...prev,
+                  channelOwner: owners,
+                }))
+              }
+              mode="module-a"
             />
           ) : null}
-          {page === 'channel' ? <ChannelDiagnosisPage rows={filteredRows} /> : null}
+          {page === 'personal' ? (
+            <PersonalOverviewPage
+              rows={rows}
+              upload={upload}
+              ownerSelection={ownerSelection}
+              onOwnerSelectionChange={setOwnerSelection}
+              onApplyFavoriteOwnersToGlobalFilter={(owners) =>
+                setFilters((prev) => ({
+                  ...prev,
+                  channelOwner: owners,
+                }))
+              }
+            />
+          ) : null}
+          {page === 'channel-detail' ? <ChannelDetailPage rows={channelRows} upload={channelUpload} viewMode="block1" /> : null}
+          {page === 'channel-breakdown' ? <ChannelDetailPage rows={channelRows} upload={channelUpload} viewMode="block2" /> : null}
+          {page === 'fee-calculator' ? <FeeCalculatorPage /> : null}
         </>
       )}
     </Layout>
