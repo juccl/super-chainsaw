@@ -55,8 +55,10 @@ const STORAGE = {
   metricCardConfig: 'channelDetail_metricCardConfig',
   metricCardOrder: 'channelDetail_metricCardOrder',
   blockOneTab: 'channelDetail_blockOneTab',
-  ownerHeatmapSort: 'channelDetail_owner_heatmap_sort',
-  channelHeatmapSort: 'channelDetail_channel_heatmap_sort',
+  ownerTableSort: 'channelDetail_ownerTableSort',
+  channelTableSort: 'channelDetail_channelTableSort',
+  ownerTableViewMode: 'channelDetail_ownerTableViewMode',
+  channelTableViewMode: 'channelDetail_channelTableViewMode',
   channelHeatmapTopN: 'channelDetail_channel_heatmap_topn',
   structureScope: 'channelDetail_structure_scope',
   structurePanelVisible: 'channelDetail_structurePanelVisible',
@@ -89,6 +91,34 @@ type GmvHeatmapSortKey =
   | 'followRatio';
 type ChannelTopN = 10 | 20 | 50 | 'all';
 type StructureScope = 'latest' | 'filtered';
+type TableViewMode = 'gmv' | 'conversion';
+type TableSortField =
+  | 'leads'
+  | 'currentRate'
+  | 'followRate'
+  | 'closedRate'
+  | 'd4gmv'
+  | 'd5gmv'
+  | 'd6gmv'
+  | 'd7gmv'
+  | 'd8gmv'
+  | 'd9gmv'
+  | 'd10gmv'
+  | 'd4Rate'
+  | 'd5Rate'
+  | 'd6Rate'
+  | 'd7Rate'
+  | 'd8Rate'
+  | 'd9Rate'
+  | 'd10Rate'
+  | 'currentGmv'
+  | 'followGmv'
+  | 'closedGmv'
+  | 'followRatio';
+type TableSortState = {
+  field: TableSortField;
+  direction: 'desc' | 'asc';
+};
 
 type ChartConfig = {
   dayRateVisible: Record<string, boolean>;
@@ -242,11 +272,17 @@ export function ChannelDetailPage({ rows, upload, viewMode = 'all' }: ChannelDet
   const [blockOneTab, setBlockOneTab] = useState<BlockOneTab>(
     () => normalizeBlockOneTab(readStorage(STORAGE.blockOneTab, 'all')),
   );
-  const [ownerHeatmapSort, setOwnerHeatmapSort] = useState<GmvHeatmapSortKey>(
-    () => normalizeGmvHeatmapSort(readStorage(STORAGE.ownerHeatmapSort, 'closedRate')),
+  const [ownerTableSort, setOwnerTableSort] = useState<TableSortState>(
+    () => normalizeTableSort(readStorage(STORAGE.ownerTableSort, { field: 'leads', direction: 'desc' })),
   );
-  const [channelHeatmapSort, setChannelHeatmapSort] = useState<GmvHeatmapSortKey>(
-    () => normalizeGmvHeatmapSort(readStorage(STORAGE.channelHeatmapSort, 'closedRate')),
+  const [channelTableSort, setChannelTableSort] = useState<TableSortState>(
+    () => normalizeTableSort(readStorage(STORAGE.channelTableSort, { field: 'leads', direction: 'desc' })),
+  );
+  const [ownerTableViewMode, setOwnerTableViewMode] = useState<TableViewMode>(
+    () => normalizeTableViewMode(readStorage(STORAGE.ownerTableViewMode, 'gmv')),
+  );
+  const [channelTableViewMode, setChannelTableViewMode] = useState<TableViewMode>(
+    () => normalizeTableViewMode(readStorage(STORAGE.channelTableViewMode, 'gmv')),
   );
   const [channelTopN, setChannelTopN] = useState<ChannelTopN>(
     () => normalizeTopN(readStorage(STORAGE.channelHeatmapTopN, 10)),
@@ -280,8 +316,10 @@ export function ChannelDetailPage({ rows, upload, viewMode = 'all' }: ChannelDet
   useEffect(() => writeStorage(STORAGE.metricCardConfig, metricVisible), [metricVisible]);
   useEffect(() => writeStorage(STORAGE.metricCardOrder, metricOrder), [metricOrder]);
   useEffect(() => writeStorage(STORAGE.blockOneTab, blockOneTab), [blockOneTab]);
-  useEffect(() => writeStorage(STORAGE.ownerHeatmapSort, ownerHeatmapSort), [ownerHeatmapSort]);
-  useEffect(() => writeStorage(STORAGE.channelHeatmapSort, channelHeatmapSort), [channelHeatmapSort]);
+  useEffect(() => writeStorage(STORAGE.ownerTableSort, ownerTableSort), [ownerTableSort]);
+  useEffect(() => writeStorage(STORAGE.channelTableSort, channelTableSort), [channelTableSort]);
+  useEffect(() => writeStorage(STORAGE.ownerTableViewMode, ownerTableViewMode), [ownerTableViewMode]);
+  useEffect(() => writeStorage(STORAGE.channelTableViewMode, channelTableViewMode), [channelTableViewMode]);
   useEffect(() => writeStorage(STORAGE.channelHeatmapTopN, channelTopN), [channelTopN]);
   useEffect(() => writeStorage(STORAGE.structureScope, structureScope), [structureScope]);
   useEffect(() => writeStorage(STORAGE.structurePanelVisible, structurePanelVisible), [structurePanelVisible]);
@@ -343,16 +381,16 @@ export function ChannelDetailPage({ rows, upload, viewMode = 'all' }: ChannelDet
   }, [structureSummary]);
 
   const ownerHeatmapRows = useMemo(
-    () => buildDayGmvHeatmapRows(filteredRows, 'owner', ownerHeatmapSort),
-    [filteredRows, ownerHeatmapSort],
+    () => sortDayGmvTableRows(buildDayGmvHeatmapRows(filteredRows, 'owner'), ownerTableSort),
+    [filteredRows, ownerTableSort],
   );
   const ownerHeatmapMax = useMemo(() => getHeatmapMaxValue(ownerHeatmapRows), [ownerHeatmapRows]);
 
   const channelHeatmapRows = useMemo(() => {
-    const rowsByChannel = buildDayGmvHeatmapRows(filteredRows, 'channelId', channelHeatmapSort);
+    const rowsByChannel = sortDayGmvTableRows(buildDayGmvHeatmapRows(filteredRows, 'channelId'), channelTableSort);
     if (channelTopN === 'all') return rowsByChannel;
     return rowsByChannel.slice(0, channelTopN);
-  }, [filteredRows, channelHeatmapSort, channelTopN]);
+  }, [filteredRows, channelTableSort, channelTopN]);
   const channelHeatmapMax = useMemo(() => getHeatmapMaxValue(channelHeatmapRows), [channelHeatmapRows]);
 
   const dayRateDefs = [
@@ -391,8 +429,10 @@ export function ChannelDetailPage({ rows, upload, viewMode = 'all' }: ChannelDet
     setShowCurrentFormula(false);
     setShowRatioFormula(false);
     setBlockOneTab('all');
-    setOwnerHeatmapSort('closedRate');
-    setChannelHeatmapSort('closedRate');
+    setOwnerTableSort({ field: 'leads', direction: 'desc' });
+    setChannelTableSort({ field: 'leads', direction: 'desc' });
+    setOwnerTableViewMode('gmv');
+    setChannelTableViewMode('gmv');
     setChannelTopN(10);
     setStructureScope('latest');
     setStructurePanelVisible(true);
@@ -681,8 +721,10 @@ export function ChannelDetailPage({ rows, upload, viewMode = 'all' }: ChannelDet
               dimensionLabel="渠道归属人"
               rows={ownerHeatmapRows}
               maxValue={ownerHeatmapMax}
-              sortKey={ownerHeatmapSort}
-              onSortKeyChange={setOwnerHeatmapSort}
+              viewMode={ownerTableViewMode}
+              onViewModeChange={setOwnerTableViewMode}
+              sortState={ownerTableSort}
+              onSortStateChange={setOwnerTableSort}
             />
             <ConversionTableCard
               title="渠道号 D4～D10 成交转化表"
@@ -690,8 +732,10 @@ export function ChannelDetailPage({ rows, upload, viewMode = 'all' }: ChannelDet
               dimensionLabel="渠道号"
               rows={channelHeatmapRows}
               maxValue={channelHeatmapMax}
-              sortKey={channelHeatmapSort}
-              onSortKeyChange={setChannelHeatmapSort}
+              viewMode={channelTableViewMode}
+              onViewModeChange={setChannelTableViewMode}
+              sortState={channelTableSort}
+              onSortStateChange={setChannelTableSort}
               topN={channelTopN}
               onTopNChange={setChannelTopN}
             />
@@ -1196,6 +1240,57 @@ function normalizeTopN(input: unknown): ChannelTopN {
   return 10;
 }
 
+function normalizeTableViewMode(input: unknown): TableViewMode {
+  return input === 'conversion' ? 'conversion' : 'gmv';
+}
+
+function normalizeTableSort(input: unknown): TableSortState {
+  const fallback: TableSortState = { field: 'leads', direction: 'desc' };
+  if (!input || typeof input !== 'object') return fallback;
+  const data = input as Partial<TableSortState>;
+  const field = normalizeTableSortField(data.field);
+  const direction = data.direction === 'asc' ? 'asc' : 'desc';
+  return { field, direction };
+}
+
+function normalizeTableSortField(input: unknown): TableSortField {
+  const allowed: TableSortField[] = [
+    'leads',
+    'currentRate',
+    'followRate',
+    'closedRate',
+    'd4gmv',
+    'd5gmv',
+    'd6gmv',
+    'd7gmv',
+    'd8gmv',
+    'd9gmv',
+    'd10gmv',
+    'd4Rate',
+    'd5Rate',
+    'd6Rate',
+    'd7Rate',
+    'd8Rate',
+    'd9Rate',
+    'd10Rate',
+    'currentGmv',
+    'followGmv',
+    'closedGmv',
+    'followRatio',
+  ];
+  return allowed.includes(input as TableSortField) ? (input as TableSortField) : 'leads';
+}
+
+function sortDayGmvTableRows(rows: HeatmapGmvRow[], sortState: TableSortState): HeatmapGmvRow[] {
+  const sorted = [...rows];
+  const { field, direction } = sortState;
+  sorted.sort((a, b) => {
+    const delta = toSortable(a[field]) - toSortable(b[field]);
+    return direction === 'asc' ? delta : -delta;
+  });
+  return sorted;
+}
+
 function buildSummary(selected: string[]): string {
   if (!selected.length) return '全部';
   if (selected.length <= 2) return selected.join('、');
@@ -1359,7 +1454,7 @@ type HeatmapGmvRow = {
   followRatio: number | null;
 };
 
-function buildDayGmvHeatmapRows(rows: ChannelDetailRow[], dimension: 'owner' | 'channelId', sortKey: GmvHeatmapSortKey): HeatmapGmvRow[] {
+function buildDayGmvHeatmapRows(rows: ChannelDetailRow[], dimension: 'owner' | 'channelId'): HeatmapGmvRow[] {
   const grouped = new Map<string, HeatmapGmvRow>();
   rows.forEach((row) => {
     const key = (dimension === 'owner' ? row.owner : row.channelId) || '未填写';
@@ -1421,7 +1516,7 @@ function buildDayGmvHeatmapRows(rows: ChannelDetailRow[], dimension: 'owner' | '
       followRatio: safeDivide(followGmv, closedGmv),
     };
   });
-  return withRate.sort((a, b) => toSortable(b[sortKey]) - toSortable(a[sortKey]));
+  return withRate;
 }
 
 function getHeatmapMaxValue(rows: HeatmapGmvRow[]): number {
@@ -1437,7 +1532,8 @@ function getHeatmapMaxValue(rows: HeatmapGmvRow[]): number {
   return max || 1;
 }
 
-function sortLabel(key: GmvHeatmapSortKey): string {
+function sortLabel(key: TableSortField): string {
+  if (key === 'leads') return 'leads数';
   if (key === 'currentRate') return '当期转化率';
   if (key === 'followRate') return '追单转化率';
   if (key === 'closedRate') return '封板转化率';
@@ -1455,8 +1551,10 @@ function ConversionTableCard({
   dimensionLabel,
   rows,
   maxValue,
-  sortKey,
-  onSortKeyChange,
+  viewMode,
+  onViewModeChange,
+  sortState,
+  onSortStateChange,
   topN,
   onTopNChange,
 }: {
@@ -1465,39 +1563,56 @@ function ConversionTableCard({
   dimensionLabel: string;
   rows: HeatmapGmvRow[];
   maxValue: number;
-  sortKey: GmvHeatmapSortKey;
-  onSortKeyChange: (key: GmvHeatmapSortKey) => void;
+  viewMode: TableViewMode;
+  onViewModeChange: (mode: TableViewMode) => void;
+  sortState: TableSortState;
+  onSortStateChange: (state: TableSortState) => void;
   topN?: ChannelTopN;
   onTopNChange?: (value: ChannelTopN) => void;
 }) {
+  const onSortFieldChange = (field: TableSortField) => {
+    onSortStateChange({
+      field,
+      direction: sortState.field === field && sortState.direction === 'desc' ? 'asc' : 'desc',
+    });
+  };
+
   const downloadCsv = () => {
     exportCsv(
       `${title}.csv`,
-      rows.map((row) => ({
-        [dimensionLabel]: row.key,
-        leads数: formatMoney(row.leads),
-        D4GMV: formatMoney(row.d4gmv),
-        D4转化率: formatPercent(row.d4Rate, 2),
-        D5GMV: formatMoney(row.d5gmv),
-        D5转化率: formatPercent(row.d5Rate, 2),
-        D6GMV: formatMoney(row.d6gmv),
-        D6转化率: formatPercent(row.d6Rate, 2),
-        D7GMV: formatMoney(row.d7gmv),
-        D7转化率: formatPercent(row.d7Rate, 2),
-        D8GMV: formatMoney(row.d8gmv),
-        D8转化率: formatPercent(row.d8Rate, 2),
-        D9GMV: formatMoney(row.d9gmv),
-        D9转化率: formatPercent(row.d9Rate, 2),
-        D10GMV: formatMoney(row.d10gmv),
-        D10转化率: formatPercent(row.d10Rate, 2),
-        当期成交GMV: formatMoney(row.currentGmv),
-        当期转化率: formatPercent(row.currentRate, 2),
-        追单GMV: formatMoney(row.followGmv),
-        追单转化率: formatPercent(row.followRate, 2),
-        封板成交GMV: formatMoney(row.closedGmv),
-        封板转化率: formatPercent(row.closedRate, 2),
-        追单占比: formatPercent(row.followRatio, 2),
-      })),
+      rows.map((row) =>
+        viewMode === 'gmv'
+          ? {
+              [dimensionLabel]: row.key,
+              leads数: formatMoney(row.leads),
+              D4GMV: formatMoney(row.d4gmv),
+              D5GMV: formatMoney(row.d5gmv),
+              D6GMV: formatMoney(row.d6gmv),
+              D7GMV: formatMoney(row.d7gmv),
+              D8GMV: formatMoney(row.d8gmv),
+              D9GMV: formatMoney(row.d9gmv),
+              D10GMV: formatMoney(row.d10gmv),
+              当期成交GMV: formatMoney(row.currentGmv),
+              追单GMV: formatMoney(row.followGmv),
+              封板成交GMV: formatMoney(row.closedGmv),
+              追单占比: formatPercent(row.followRatio, 2),
+            }
+          : {
+              [dimensionLabel]: row.key,
+              leads数: formatMoney(row.leads),
+              D4转化率: formatPercent(row.d4Rate, 2),
+              D5转化率: formatPercent(row.d5Rate, 2),
+              D6转化率: formatPercent(row.d6Rate, 2),
+              D7转化率: formatPercent(row.d7Rate, 2),
+              D8转化率: formatPercent(row.d8Rate, 2),
+              D9转化率: formatPercent(row.d9Rate, 2),
+              D10转化率: formatPercent(row.d10Rate, 2),
+              当期转化率: formatPercent(row.currentRate, 2),
+              追单转化率: formatPercent(row.followRate, 2),
+              封板转化率: formatPercent(row.closedRate, 2),
+              追单占比: formatPercent(row.followRatio, 2),
+            },
+      ),
     );
   };
 
@@ -1506,18 +1621,35 @@ function ConversionTableCard({
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">
           <span className="text-xs text-slate-600">快捷排序：</span>
-          {(['currentRate', 'followRate', 'closedRate'] as GmvHeatmapSortKey[]).map((key) => (
+          {(['leads', 'currentRate', 'followRate', 'closedRate'] as TableSortField[]).map((key) => (
             <button
               key={key}
               type="button"
-              className={`rounded px-2 py-1 text-xs ${sortKey === key ? 'bg-sky-100 text-sky-700' : 'text-slate-600 hover:bg-white'}`}
-              onClick={() => onSortKeyChange(key)}
+              className={`rounded px-2 py-1 text-xs ${sortState.field === key ? 'bg-sky-100 text-sky-700' : 'text-slate-600 hover:bg-white'}`}
+              onClick={() => onSortFieldChange(key)}
             >
               {sortLabel(key)}
+              {sortState.field === key ? (sortState.direction === 'desc' ? '↓' : '↑') : ''}
             </button>
           ))}
         </div>
         <div className="flex items-center gap-2">
+          <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
+            <button
+              type="button"
+              className={`rounded px-2 py-1 text-xs ${viewMode === 'gmv' ? 'bg-sky-100 text-sky-700' : 'text-slate-600 hover:bg-white'}`}
+              onClick={() => onViewModeChange('gmv')}
+            >
+              GMV视图
+            </button>
+            <button
+              type="button"
+              className={`rounded px-2 py-1 text-xs ${viewMode === 'conversion' ? 'bg-sky-100 text-sky-700' : 'text-slate-600 hover:bg-white'}`}
+              onClick={() => onViewModeChange('conversion')}
+            >
+              转化率视图
+            </button>
+          </div>
           {onTopNChange ? (
             <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">
               <span className="text-xs text-slate-600">展示：</span>
@@ -1537,38 +1669,52 @@ function ConversionTableCard({
             导出 CSV
           </button>
           <div className="inline-flex items-center gap-2 text-xs text-slate-500">
-            <span>GMV低</span>
-            <span className="h-2.5 w-24 rounded-full bg-gradient-to-r from-[#e0edff] to-[#2563eb]" />
-            <span>GMV高</span>
-            <span className="ml-2">转化率低</span>
-            <span className="h-2.5 w-24 rounded-full bg-gradient-to-r from-[#e9f8ef] to-[#22c55e]" />
-            <span>转化率高</span>
+            {viewMode === 'gmv' ? (
+              <>
+                <span>GMV低</span>
+                <span className="h-2.5 w-24 rounded-full bg-gradient-to-r from-[#e0edff] to-[#2563eb]" />
+                <span>GMV高</span>
+              </>
+            ) : (
+              <>
+                <span>转化率低</span>
+                <span className="h-2.5 w-24 rounded-full bg-gradient-to-r from-[#e9f8ef] to-[#22c55e]" />
+                <span>转化率高</span>
+              </>
+            )}
           </div>
         </div>
       </div>
       <div className="max-h-[540px] overflow-auto">
-        <table className="min-w-[2200px] border-separate border-spacing-0 text-sm">
+        <table className={`border-separate border-spacing-0 text-sm ${viewMode === 'gmv' ? 'min-w-[1600px]' : 'min-w-[1600px]'}`}>
           <thead className="sticky top-0 z-10 bg-[#f1f5fb] text-xs text-slate-600">
             <tr>
               <th className="sticky left-0 z-20 border-b border-line bg-[#f1f5fb] px-3 py-2 text-left font-semibold">{dimensionLabel}</th>
-              <th className="border-b border-line px-3 py-2 text-right font-semibold">leads数</th>
-              {([4, 5, 6, 7, 8, 9, 10] as const).map((day) => (
-                <th key={`gmv-${day}`} className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortKeyChange(`d${day}gmv` as GmvHeatmapSortKey)}>
-                  {`D${day} GMV`}
-                </th>
-              ))}
-              {([4, 5, 6, 7, 8, 9, 10] as const).map((day) => (
-                <th key={`rate-${day}`} className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortKeyChange(`d${day}Rate` as GmvHeatmapSortKey)}>
-                  {`D${day} 转化率`}
-                </th>
-              ))}
-              <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortKeyChange('currentGmv')}>当期成交GMV</th>
-              <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortKeyChange('currentRate')}>当期转化率</th>
-              <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortKeyChange('followGmv')}>追单GMV</th>
-              <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortKeyChange('followRate')}>追单转化率</th>
-              <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortKeyChange('closedGmv')}>封板成交GMV</th>
-              <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortKeyChange('closedRate')}>封板转化率</th>
-              <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortKeyChange('followRatio')}>追单占比</th>
+              <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange('leads')}>leads数</th>
+              {viewMode === 'gmv' ? (
+                <>
+                  {([4, 5, 6, 7, 8, 9, 10] as const).map((day) => (
+                    <th key={`gmv-${day}`} className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange(`d${day}gmv` as TableSortField)}>
+                      {`D${day} GMV`}
+                    </th>
+                  ))}
+                  <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange('currentGmv')}>当期成交GMV</th>
+                  <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange('followGmv')}>追单GMV</th>
+                  <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange('closedGmv')}>封板成交GMV</th>
+                </>
+              ) : (
+                <>
+                  {([4, 5, 6, 7, 8, 9, 10] as const).map((day) => (
+                    <th key={`rate-${day}`} className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange(`d${day}Rate` as TableSortField)}>
+                      {`D${day} 转化率`}
+                    </th>
+                  ))}
+                  <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange('currentRate')}>当期转化率</th>
+                  <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange('followRate')}>追单转化率</th>
+                  <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange('closedRate')}>封板转化率</th>
+                </>
+              )}
+              <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange('followRatio')}>追单占比</th>
             </tr>
           </thead>
           <tbody>
@@ -1576,43 +1722,45 @@ function ConversionTableCard({
               <tr key={row.key} className="hover:bg-slate-50/70">
                 <td className="sticky left-0 z-[1] border-b border-line bg-white px-3 py-2 text-sm font-medium text-slate-700">{row.key}</td>
                 <td className="border-b border-line px-3 py-2 text-right tabular-nums">{formatMoney(row.leads)}</td>
-                {DAY_GMV_KEYS.map((key) => (
-                  <td
-                    key={key}
-                    className="border-b border-line px-3 py-2 text-right tabular-nums"
-                    style={{ background: heatColor(row[key], maxValue) }}
-                    title={`${dimensionLabel}：${row.key}\n日期：${key.toUpperCase().replace('GMV', '')}\n成交GMV：${formatMoney(row[key])}`}
-                  >
-                    {formatGmvCell(row[key])}
-                  </td>
-                ))}
-                {(['d4Rate', 'd5Rate', 'd6Rate', 'd7Rate', 'd8Rate', 'd9Rate', 'd10Rate'] as const).map((key) => (
-                  <td
-                    key={key}
-                    className="border-b border-line px-3 py-2 text-right tabular-nums"
-                    style={{ background: rateHeatColor(row[key]) }}
-                    title={`${dimensionLabel}：${row.key}\n日期：${key.slice(0, 2).toUpperCase()}\n转化率：${formatPercent(row[key], 2)}\nleads数：${formatMoney(row.leads)}`}
-                  >
-                    {formatPercent(row[key], 2)}
-                  </td>
-                ))}
-                <td
-                  className="border-b border-line px-3 py-2 text-right tabular-nums font-semibold"
-                  style={{ background: heatColor(row.currentGmv, maxValue) }}
-                >
-                  {formatGmvCell(row.currentGmv)}
-                </td>
-                <td className="border-b border-line px-3 py-2 text-right tabular-nums" style={{ background: rateHeatColor(row.currentRate) }}>{formatPercent(row.currentRate, 2)}</td>
-                <td className="border-b border-line px-3 py-2 text-right tabular-nums font-semibold" style={{ background: heatColor(row.followGmv, maxValue) }}>{formatGmvCell(row.followGmv)}</td>
-                <td className="border-b border-line px-3 py-2 text-right tabular-nums" style={{ background: rateHeatColor(row.followRate) }}>{formatPercent(row.followRate, 2)}</td>
-                <td className="border-b border-line px-3 py-2 text-right tabular-nums font-semibold" style={{ background: heatColor(row.closedGmv, maxValue) }}>{formatGmvCell(row.closedGmv)}</td>
-                <td className="border-b border-line px-3 py-2 text-right tabular-nums" style={{ background: rateHeatColor(row.closedRate) }}>{formatPercent(row.closedRate, 2)}</td>
+                {viewMode === 'gmv' ? (
+                  <>
+                    {DAY_GMV_KEYS.map((key) => (
+                      <td
+                        key={key}
+                        className="border-b border-line px-3 py-2 text-right tabular-nums"
+                        style={{ background: heatColor(row[key], maxValue) }}
+                        title={`${dimensionLabel}：${row.key}\n日期：${key.toUpperCase().replace('GMV', '')}\n成交GMV：${formatMoney(row[key])}`}
+                      >
+                        {formatGmvCell(row[key])}
+                      </td>
+                    ))}
+                    <td className="border-b border-line px-3 py-2 text-right tabular-nums font-semibold" style={{ background: heatColor(row.currentGmv, maxValue) }}>{formatGmvCell(row.currentGmv)}</td>
+                    <td className="border-b border-line px-3 py-2 text-right tabular-nums font-semibold" style={{ background: heatColor(row.followGmv, maxValue) }}>{formatGmvCell(row.followGmv)}</td>
+                    <td className="border-b border-line px-3 py-2 text-right tabular-nums font-semibold" style={{ background: heatColor(row.closedGmv, maxValue) }}>{formatGmvCell(row.closedGmv)}</td>
+                  </>
+                ) : (
+                  <>
+                    {(['d4Rate', 'd5Rate', 'd6Rate', 'd7Rate', 'd8Rate', 'd9Rate', 'd10Rate'] as const).map((key) => (
+                      <td
+                        key={key}
+                        className="border-b border-line px-3 py-2 text-right tabular-nums"
+                        style={{ background: rateHeatColor(row[key]) }}
+                        title={`${dimensionLabel}：${row.key}\n日期：${key.slice(0, 2).toUpperCase()}\n转化率：${formatPercent(row[key], 2)}\nleads数：${formatMoney(row.leads)}`}
+                      >
+                        {formatPercent(row[key], 2)}
+                      </td>
+                    ))}
+                    <td className="border-b border-line px-3 py-2 text-right tabular-nums" style={{ background: rateHeatColor(row.currentRate) }}>{formatPercent(row.currentRate, 2)}</td>
+                    <td className="border-b border-line px-3 py-2 text-right tabular-nums" style={{ background: rateHeatColor(row.followRate) }}>{formatPercent(row.followRate, 2)}</td>
+                    <td className="border-b border-line px-3 py-2 text-right tabular-nums" style={{ background: rateHeatColor(row.closedRate) }}>{formatPercent(row.closedRate, 2)}</td>
+                  </>
+                )}
                 <td className="border-b border-line px-3 py-2 text-right tabular-nums">{formatPercent(row.followRatio, 2)}</td>
               </tr>
             ))}
             {!rows.length ? (
               <tr>
-                <td colSpan={24} className="px-3 py-8 text-center text-sm text-slate-500">暂无可展示数据</td>
+                <td colSpan={16} className="px-3 py-8 text-center text-sm text-slate-500">暂无可展示数据</td>
               </tr>
             ) : null}
           </tbody>

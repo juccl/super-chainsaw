@@ -30,6 +30,7 @@ interface SidebarProps {
 }
 
 const CHANNEL_SUBMENU_KEY = 'business-dashboard:channel-submenu-open';
+const PRIMARY_MENU_ORDER_KEY = 'business-dashboard:primary-menu-order';
 
 type IconKind = 'overview' | 'personal' | 'channel' | 'calculator';
 
@@ -38,6 +39,8 @@ const items: Array<{ key: PageKey; label: string; icon: IconKind }> = [
   { key: 'personal', label: '个人经营', icon: 'personal' },
   { key: 'fee-calculator', label: '费比测算', icon: 'calculator' },
 ];
+type PrimaryMenuKey = 'overview' | 'personal' | 'channel' | 'fee-calculator';
+const DEFAULT_PRIMARY_MENU_ORDER: PrimaryMenuKey[] = ['overview', 'personal', 'channel', 'fee-calculator'];
 
 export function Sidebar({
   page,
@@ -53,6 +56,26 @@ export function Sidebar({
   onClearOverviewData,
   onClearChannelData,
 }: SidebarProps) {
+  const [primaryMenuOrder, setPrimaryMenuOrder] = useState<PrimaryMenuKey[]>(() => {
+    if (typeof window === 'undefined') return DEFAULT_PRIMARY_MENU_ORDER;
+    const cached = window.localStorage.getItem(PRIMARY_MENU_ORDER_KEY);
+    if (!cached) return DEFAULT_PRIMARY_MENU_ORDER;
+    try {
+      const parsed = JSON.parse(cached);
+      if (!Array.isArray(parsed)) return DEFAULT_PRIMARY_MENU_ORDER;
+      const valid = parsed.filter((item): item is PrimaryMenuKey =>
+        item === 'overview' || item === 'personal' || item === 'channel' || item === 'fee-calculator',
+      );
+      const merged = [...valid];
+      DEFAULT_PRIMARY_MENU_ORDER.forEach((key) => {
+        if (!merged.includes(key)) merged.push(key);
+      });
+      return merged;
+    } catch {
+      return DEFAULT_PRIMARY_MENU_ORDER;
+    }
+  });
+  const [draggingMenuKey, setDraggingMenuKey] = useState<PrimaryMenuKey | null>(null);
   const [channelSubmenuOpen, setChannelSubmenuOpen] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     const cached = window.localStorage.getItem(CHANNEL_SUBMENU_KEY);
@@ -65,6 +88,10 @@ export function Sidebar({
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(CHANNEL_SUBMENU_KEY, String(channelSubmenuOpen));
   }, [channelSubmenuOpen]);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(PRIMARY_MENU_ORDER_KEY, JSON.stringify(primaryMenuOrder));
+  }, [primaryMenuOrder]);
 
   const onOverviewFile = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -77,6 +104,23 @@ export function Sidebar({
     if (!file) return;
     onUploadChannel(file);
     event.target.value = '';
+  };
+
+  const onMenuDrop = (targetKey: PrimaryMenuKey) => {
+    if (!draggingMenuKey || draggingMenuKey === targetKey) return;
+    const prevOrder = [...primaryMenuOrder];
+    const from = prevOrder.indexOf(draggingMenuKey);
+    const to = prevOrder.indexOf(targetKey);
+    if (from < 0 || to < 0) return;
+    prevOrder.splice(from, 1);
+    prevOrder.splice(to, 0, draggingMenuKey);
+    setPrimaryMenuOrder(prevOrder);
+  };
+
+  const primaryItemMap: Record<Exclude<PrimaryMenuKey, 'channel'>, { key: PageKey; label: string; icon: IconKind }> = {
+    overview: { key: 'overview', label: '首页', icon: 'overview' },
+    personal: { key: 'personal', label: '个人经营', icon: 'personal' },
+    'fee-calculator': { key: 'fee-calculator', label: '费比测算', icon: 'calculator' },
   };
 
   return (
@@ -105,81 +149,110 @@ export function Sidebar({
         </div>
 
         <nav className="mt-2 space-y-2 border-t border-[#dce7f5] pt-4">
-          {items.map((item) => {
+          {primaryMenuOrder.map((menuKey) => {
+            if (menuKey === 'channel') {
+              return (
+                <div
+                  key={menuKey}
+                  className={`${collapsed ? '' : 'rounded-2xl border border-[#dce7f5] bg-white/80 p-2'} ${draggingMenuKey === menuKey ? 'opacity-60' : ''}`}
+                  draggable={!collapsed}
+                  onDragStart={() => setDraggingMenuKey(menuKey)}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                  }}
+                  onDrop={() => onMenuDrop(menuKey)}
+                  onDragEnd={() => setDraggingMenuKey(null)}
+                  title={collapsed ? '一级菜单拖拽排序请先展开侧栏' : '可拖拽排序'}
+                >
+                  <div className={`flex ${collapsed ? 'justify-center' : 'items-center gap-2'}`}>
+                    <button
+                      type="button"
+                      title={collapsed ? '渠道明细' : ''}
+                      onClick={() => onPageChange('channel-detail')}
+                      className={`sidebar-nav-item flex h-11 items-center rounded-2xl px-3 text-sm ${
+                        page === 'channel-detail' || page === 'channel-breakdown'
+                          ? 'sidebar-nav-item-active bg-gradient-to-r from-[#4f8ff0] to-[#357ef6] text-white shadow-soft'
+                          : 'text-slate-700 hover:bg-white hover:text-slate-900'
+                      } ${collapsed ? 'w-11 justify-center' : 'w-full gap-3'}`}
+                    >
+                      <SidebarIcon kind="channel" active={page === 'channel-detail' || page === 'channel-breakdown'} />
+                      {collapsed ? null : '渠道明细'}
+                    </button>
+                    {collapsed ? null : (
+                      <button
+                        type="button"
+                        onClick={() => setChannelSubmenuOpen((prev) => !prev)}
+                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#dce7f5] bg-white text-slate-500 transition hover:bg-slate-50"
+                        title={channelSubmenuOpen ? '收起二级菜单' : '展开二级菜单'}
+                      >
+                        <ChevronDown
+                          size={14}
+                          className={`transition-transform duration-150 ${channelSubmenuOpen ? 'rotate-0' : '-rotate-90'}`}
+                        />
+                      </button>
+                    )}
+                  </div>
+                  {!collapsed && channelSubmenuOpen ? (
+                    <div className="mt-2 space-y-1.5 pl-2">
+                      <button
+                        type="button"
+                        onClick={() => onPageChange('channel-detail')}
+                        className={`sidebar-nav-subitem flex h-9 w-full items-center rounded-xl px-3 text-sm ${
+                          page === 'channel-detail'
+                            ? 'bg-[#eaf2ff] text-[#2459af]'
+                            : 'text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        板块一｜整体波动
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onPageChange('channel-breakdown')}
+                        className={`sidebar-nav-subitem flex h-9 w-full items-center rounded-xl px-3 text-sm ${
+                          page === 'channel-breakdown'
+                            ? 'bg-[#eaf2ff] text-[#2459af]'
+                            : 'text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        板块二｜个人拆解
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            }
+
+            const item = primaryItemMap[menuKey];
             const active = item.key === page;
             return (
-              <button
-                key={item.key}
-                type="button"
-                title={collapsed ? item.label : ''}
-                onClick={() => onPageChange(item.key)}
-                className={`sidebar-nav-item flex h-11 w-full items-center rounded-2xl px-3 text-sm ${
-                  active
-                    ? 'sidebar-nav-item-active bg-gradient-to-r from-[#4f8ff0] to-[#357ef6] text-white shadow-soft'
-                    : 'text-slate-700 hover:bg-white hover:text-slate-900'
-                } ${collapsed ? 'justify-center' : 'gap-3'}`}
+              <div
+                key={menuKey}
+                draggable={!collapsed}
+                onDragStart={() => setDraggingMenuKey(menuKey)}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                }}
+                onDrop={() => onMenuDrop(menuKey)}
+                onDragEnd={() => setDraggingMenuKey(null)}
+                className={draggingMenuKey === menuKey ? 'opacity-60' : ''}
+                title={collapsed ? '' : '可拖拽排序'}
               >
-                <SidebarIcon kind={item.icon} active={active} />
-                {collapsed ? null : item.label}
-              </button>
-            );
-          })}
-          <div className={`${collapsed ? '' : 'rounded-2xl border border-[#dce7f5] bg-white/80 p-2'}`}>
-            <div className={`flex ${collapsed ? 'justify-center' : 'items-center gap-2'}`}>
-              <button
-                type="button"
-                title={collapsed ? '渠道明细' : ''}
-                onClick={() => onPageChange('channel-detail')}
-                className={`sidebar-nav-item flex h-11 items-center rounded-2xl px-3 text-sm ${
-                  page === 'channel-detail' || page === 'channel-breakdown'
-                    ? 'sidebar-nav-item-active bg-gradient-to-r from-[#4f8ff0] to-[#357ef6] text-white shadow-soft'
-                    : 'text-slate-700 hover:bg-white hover:text-slate-900'
-                } ${collapsed ? 'w-11 justify-center' : 'w-full gap-3'}`}
-              >
-                <SidebarIcon kind="channel" active={page === 'channel-detail' || page === 'channel-breakdown'} />
-                {collapsed ? null : '渠道明细'}
-              </button>
-              {collapsed ? null : (
                 <button
                   type="button"
-                  onClick={() => setChannelSubmenuOpen((prev) => !prev)}
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#dce7f5] bg-white text-slate-500 transition hover:bg-slate-50"
-                  title={channelSubmenuOpen ? '收起二级菜单' : '展开二级菜单'}
+                  title={collapsed ? item.label : ''}
+                  onClick={() => onPageChange(item.key)}
+                  className={`sidebar-nav-item flex h-11 w-full items-center rounded-2xl px-3 text-sm ${
+                    active
+                      ? 'sidebar-nav-item-active bg-gradient-to-r from-[#4f8ff0] to-[#357ef6] text-white shadow-soft'
+                      : 'text-slate-700 hover:bg-white hover:text-slate-900'
+                  } ${collapsed ? 'justify-center' : 'gap-3'}`}
                 >
-                  <ChevronDown
-                    size={14}
-                    className={`transition-transform duration-150 ${channelSubmenuOpen ? 'rotate-0' : '-rotate-90'}`}
-                  />
-                </button>
-              )}
-            </div>
-            {!collapsed && channelSubmenuOpen ? (
-              <div className="mt-2 space-y-1.5 pl-2">
-                <button
-                  type="button"
-                  onClick={() => onPageChange('channel-detail')}
-                  className={`sidebar-nav-subitem flex h-9 w-full items-center rounded-xl px-3 text-sm ${
-                    page === 'channel-detail'
-                      ? 'bg-[#eaf2ff] text-[#2459af]'
-                      : 'text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  板块一｜整体波动
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onPageChange('channel-breakdown')}
-                  className={`sidebar-nav-subitem flex h-9 w-full items-center rounded-xl px-3 text-sm ${
-                    page === 'channel-breakdown'
-                      ? 'bg-[#eaf2ff] text-[#2459af]'
-                      : 'text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  板块二｜个人拆解
+                  <SidebarIcon kind={item.icon} active={active} />
+                  {collapsed ? null : item.label}
                 </button>
               </div>
-            ) : null}
-          </div>
+            );
+          })}
         </nav>
 
         <div className="mt-4 rounded-2xl border border-[#dce7f5] bg-white p-3 shadow-card">
