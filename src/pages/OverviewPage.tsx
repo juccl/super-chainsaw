@@ -1348,11 +1348,51 @@ function SortableMetricCard({ id, children }: { id: string; children: ReactNode 
 }
 
 function OverviewSummaryCard({ leads, totalGmv }: { leads: number; totalGmv: number }) {
-  const now = new Date();
-  const currentDay = now.getDate();
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const [chinaNow, setChinaNow] = useState<Date>(() => new Date());
+  useEffect(() => {
+    const timer = window.setInterval(() => setChinaNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const { hour, currentDay, daysInMonth } = useMemo(() => {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      hour12: false,
+    }).formatToParts(chinaNow);
+    const getPart = (type: Intl.DateTimeFormatPartTypes) =>
+      Number(parts.find((part) => part.type === type)?.value || '0');
+    const year = getPart('year');
+    const month = getPart('month');
+    const day = getPart('day');
+    return {
+      hour: getPart('hour'),
+      currentDay: day,
+      daysInMonth: new Date(year, month, 0).getDate(),
+    };
+  }, [chinaNow]);
+
+  const summaryHint =
+    hour >= 5 && hour <= 10
+      ? '早间先看规模与节奏，快速判断今日经营起点。'
+      : hour >= 11 && hour <= 13
+        ? '中午复盘半日波动，及时修正投放与承接动作。'
+        : hour >= 14 && hour <= 17
+          ? '下午重点看营期变化，提前准备晚间转化承接。'
+          : hour >= 18 && hour <= 23
+            ? '晚间关注转化效率与课程承接，沉淀今日复盘结论。'
+            : '夜间看趋势稳定性，为明天的经营动作做准备。';
+
   const monthProgress = Math.max(0, Math.min(100, (currentDay / Math.max(daysInMonth, 1)) * 100));
-  const monthLabel = `${now.getMonth() + 1}月进度`;
+  const month = Number(
+    new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Shanghai', month: '2-digit' })
+      .formatToParts(chinaNow)
+      .find((part) => part.type === 'month')?.value || '1',
+  );
+  const monthLabel = `${month}月进度`;
   const progressX = 8 + (96 * monthProgress) / 100;
   const weekMarks = [8, 32, 56, 80, 104];
 
@@ -1365,7 +1405,7 @@ function OverviewSummaryCard({ leads, totalGmv }: { leads: number; totalGmv: num
           </div>
           <div>
             <div className="text-sm font-semibold text-slate-800">本期经营摘要</div>
-            <div className="mt-0.5 text-xs text-slate-500">快速查看本期规模与总成交产出。</div>
+            <div className="mt-0.5 text-xs text-slate-500">{summaryHint}</div>
           </div>
           <div className="ml-2 hidden rounded-xl border border-white/80 bg-white/80 px-2 py-1.5 md:block">
             <svg width="120" height="38" viewBox="0 0 112 38" fill="none" aria-hidden>

@@ -63,4 +63,35 @@ select {
   .filter-scroll::-webkit-scrollbar-track {
     background: transparent;
   }
+
+  .sidebar-nav-item {
+    transition: background-color 140ms ease, color 140ms ease, transform 120ms ease, box-shadow 140ms ease;
+  }
+
+  .sidebar-nav-item:hover {
+    transform: translateY(-1px);
+  }
+
+  .sidebar-nav-item-active {
+    animation: nav-active-pop 120ms ease-out;
+  }
+
+  .sidebar-nav-subitem {
+    transition: background-color 130ms ease, color 130ms ease, transform 120ms ease;
+  }
+
+  .sidebar-nav-subitem:hover {
+    transform: translateX(1px);
+  }
+}
+
+@keyframes nav-active-pop {
+  0% {
+    transform: scale(0.985);
+    filter: saturate(0.9);
+  }
+  100% {
+    transform: scale(1);
+    filter: saturate(1);
+  }
 }

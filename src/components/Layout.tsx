@@ -94,7 +94,7 @@ export function Layout({
         onClearOverviewData={onClearOverviewData}
         onClearChannelData={onClearChannelData}
       />
-      <main className={collapsed ? 'lg:pl-20' : 'lg:pl-64'}>
+      <main className={collapsed ? 'lg:pl-20' : 'lg:pl-72'}>
         <header className="sticky top-0 z-20 border-b border-line bg-canvas/95 px-4 py-4 backdrop-blur lg:px-7">
           <div className="panel border-none bg-white p-3 shadow-card">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -139,13 +139,14 @@ export function Layout({
 }
 
 function getChinaGreeting(now: Date): string {
-  const hour = Number(
-    new Intl.DateTimeFormat('zh-CN', {
-      timeZone: 'Asia/Shanghai',
-      hour: '2-digit',
-      hour12: false,
-    }).format(now),
-  );
+  const hourPart = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Shanghai',
+    hour: '2-digit',
+    hour12: false,
+  })
+    .formatToParts(now)
+    .find((part) => part.type === 'hour')?.value;
+  const hour = Number(hourPart ?? '0');
   if (hour >= 5 && hour <= 10) return '早上好';
   if (hour >= 11 && hour <= 13) return '中午好';
   if (hour >= 14 && hour <= 17) return '下午好';

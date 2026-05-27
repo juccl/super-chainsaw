@@ -17,12 +17,13 @@ import { Settings2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
-  Bar,
-  BarChart,
+  Cell,
   CartesianGrid,
   LabelList,
   Line,
   LineChart,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -30,6 +31,7 @@ import {
 } from 'recharts';
 import { ChartCard } from '../components/ChartCard';
 import { MetricCard } from '../components/MetricCard';
+import { exportCsv } from '../lib/exportCsv';
 import {
   type ChannelDetailFilters,
   type ChannelDetailRow,
@@ -37,12 +39,11 @@ import {
   type ChannelDetailUploadRecord,
   applyChannelDetailFilters,
   buildChannelCampaignTrend,
-  buildDimensionBreakdown,
   channelDetailFilterOptions,
   emptyChannelDetailFilters,
   summarizeChannelDetailRows,
 } from '../lib/channelDetail';
-import { formatMoney, formatPercent, formatRatio } from '../lib/formatters';
+import { formatMoney, formatPercent, formatRatio, safeDivide } from '../lib/formatters';
 import { readStorage, writeStorage } from '../lib/storage';
 
 const STORAGE = {
@@ -54,11 +55,40 @@ const STORAGE = {
   metricCardConfig: 'channelDetail_metricCardConfig',
   metricCardOrder: 'channelDetail_metricCardOrder',
   blockOneTab: 'channelDetail_blockOneTab',
+  ownerHeatmapSort: 'channelDetail_owner_heatmap_sort',
+  channelHeatmapSort: 'channelDetail_channel_heatmap_sort',
+  channelHeatmapTopN: 'channelDetail_channel_heatmap_topn',
+  structureScope: 'channelDetail_structure_scope',
+  structurePanelVisible: 'channelDetail_structurePanelVisible',
 };
 
 type DimensionKey = 'owner' | 'channelId' | 'category';
 type HeatmapSortKey = 'closedRate' | 'd4Rate' | 'followRatio';
 type BlockOneTab = 'all' | 'day' | 'current' | 'ratio';
+type GmvHeatmapSortKey =
+  | 'currentRate'
+  | 'followRate'
+  | 'closedRate'
+  | 'd4gmv'
+  | 'd5gmv'
+  | 'd6gmv'
+  | 'd7gmv'
+  | 'd8gmv'
+  | 'd9gmv'
+  | 'd10gmv'
+  | 'd4Rate'
+  | 'd5Rate'
+  | 'd6Rate'
+  | 'd7Rate'
+  | 'd8Rate'
+  | 'd9Rate'
+  | 'd10Rate'
+  | 'currentGmv'
+  | 'followGmv'
+  | 'closedGmv'
+  | 'followRatio';
+type ChannelTopN = 10 | 20 | 50 | 'all';
+type StructureScope = 'latest' | 'filtered';
 
 type ChartConfig = {
   dayRateVisible: Record<string, boolean>;
@@ -182,6 +212,8 @@ const CHANNEL_METRIC_LABELS: Record<ChannelMetricKey, string> = {
 };
 
 const DAY_KEYS: Array<4 | 5 | 6 | 7 | 8 | 9 | 10> = [4, 5, 6, 7, 8, 9, 10];
+const DAY_GMV_KEYS = ['d4gmv', 'd5gmv', 'd6gmv', 'd7gmv', 'd8gmv', 'd9gmv', 'd10gmv'] as const;
+type DayGmvKey = (typeof DAY_GMV_KEYS)[number];
 
 interface ChannelDetailPageProps {
   rows: ChannelDetailRow[];
@@ -210,6 +242,21 @@ export function ChannelDetailPage({ rows, upload, viewMode = 'all' }: ChannelDet
   const [blockOneTab, setBlockOneTab] = useState<BlockOneTab>(
     () => normalizeBlockOneTab(readStorage(STORAGE.blockOneTab, 'all')),
   );
+  const [ownerHeatmapSort, setOwnerHeatmapSort] = useState<GmvHeatmapSortKey>(
+    () => normalizeGmvHeatmapSort(readStorage(STORAGE.ownerHeatmapSort, 'closedRate')),
+  );
+  const [channelHeatmapSort, setChannelHeatmapSort] = useState<GmvHeatmapSortKey>(
+    () => normalizeGmvHeatmapSort(readStorage(STORAGE.channelHeatmapSort, 'closedRate')),
+  );
+  const [channelTopN, setChannelTopN] = useState<ChannelTopN>(
+    () => normalizeTopN(readStorage(STORAGE.channelHeatmapTopN, 10)),
+  );
+  const [structureScope, setStructureScope] = useState<StructureScope>(
+    () => normalizeStructureScope(readStorage(STORAGE.structureScope, 'latest')),
+  );
+  const [structurePanelVisible, setStructurePanelVisible] = useState<boolean>(
+    () => normalizeBool(readStorage(STORAGE.structurePanelVisible, true), true),
+  );
   const [showMetricSettings, setShowMetricSettings] = useState(false);
   const [metricVisible, setMetricVisible] = useState<ChannelMetricKey[]>(
     () => normalizeMetricKeys(readStorage(STORAGE.metricCardConfig, CHANNEL_METRIC_DEFAULT_VISIBLE), CHANNEL_METRIC_DEFAULT_VISIBLE),
@@ -233,15 +280,16 @@ export function ChannelDetailPage({ rows, upload, viewMode = 'all' }: ChannelDet
   useEffect(() => writeStorage(STORAGE.metricCardConfig, metricVisible), [metricVisible]);
   useEffect(() => writeStorage(STORAGE.metricCardOrder, metricOrder), [metricOrder]);
   useEffect(() => writeStorage(STORAGE.blockOneTab, blockOneTab), [blockOneTab]);
+  useEffect(() => writeStorage(STORAGE.ownerHeatmapSort, ownerHeatmapSort), [ownerHeatmapSort]);
+  useEffect(() => writeStorage(STORAGE.channelHeatmapSort, channelHeatmapSort), [channelHeatmapSort]);
+  useEffect(() => writeStorage(STORAGE.channelHeatmapTopN, channelTopN), [channelTopN]);
+  useEffect(() => writeStorage(STORAGE.structureScope, structureScope), [structureScope]);
+  useEffect(() => writeStorage(STORAGE.structurePanelVisible, structurePanelVisible), [structurePanelVisible]);
 
   const options = useMemo(() => channelDetailFilterOptions(rows), [rows]);
   const filteredRows = useMemo(() => applyChannelDetailFilters(rows, filters), [rows, filters]);
   const summary = useMemo(() => summarizeChannelDetailRows(filteredRows), [filteredRows]);
   const campaignTrend = useMemo(() => buildChannelCampaignTrend(filteredRows), [filteredRows]);
-  const breakdown = useMemo(
-    () => buildDimensionBreakdown(filteredRows, chartConfig.dimension),
-    [filteredRows, chartConfig.dimension],
-  );
 
   const dayRateData = useMemo(
     () =>
@@ -277,49 +325,35 @@ export function ChannelDetailPage({ rows, upload, viewMode = 'all' }: ChannelDet
       })),
     [campaignTrend],
   );
+  const latestCampaignPoint = campaignTrend.length ? campaignTrend[campaignTrend.length - 1] : null;
+  const structureSummary = structureScope === 'latest' ? latestCampaignPoint?.summary ?? null : summary;
+  const structureData = useMemo(() => {
+    if (!structureSummary) return null;
+    const current = structureSummary.currentGmv;
+    const follow = structureSummary.followGmv;
+    const total = structureSummary.closedGmv;
+    if (!Number.isFinite(total) || total <= 0) return null;
+    return {
+      currentGmv: current,
+      followGmv: follow,
+      totalGmv: total,
+      currentRatio: current / total,
+      followRatio: follow / total,
+    };
+  }, [structureSummary]);
 
-  const rankData = useMemo(
-    () =>
-      breakdown.slice(0, 12).map((item) => ({
-        key: item.key,
-        closedRate: item.summary.closedRate,
-        closedGmv: item.summary.closedGmv,
-        leads: item.summary.leads,
-        closedRoi: item.summary.closedRoi,
-      })),
-    [breakdown],
+  const ownerHeatmapRows = useMemo(
+    () => buildDayGmvHeatmapRows(filteredRows, 'owner', ownerHeatmapSort),
+    [filteredRows, ownerHeatmapSort],
   );
+  const ownerHeatmapMax = useMemo(() => getHeatmapMaxValue(ownerHeatmapRows), [ownerHeatmapRows]);
 
-  const compareData = useMemo(
-    () =>
-      breakdown.slice(0, 12).map((item) => ({
-        key: item.key,
-        currentGmv: item.summary.currentGmv,
-        followGmv: item.summary.followGmv,
-        followRatio: item.summary.followRatio,
-      })),
-    [breakdown],
-  );
-
-  const heatmapRows = useMemo(() => {
-    const sorted = [...breakdown].sort((a, b) => {
-      const av = pickSortMetric(a.summary, chartConfig.heatmapSort) ?? -1;
-      const bv = pickSortMetric(b.summary, chartConfig.heatmapSort) ?? -1;
-      return bv - av;
-    });
-    return sorted.slice(0, 24);
-  }, [breakdown, chartConfig.heatmapSort]);
-
-  const heatmapMax = useMemo(() => {
-    let max = 0;
-    heatmapRows.forEach((item) => {
-      DAY_KEYS.forEach((day) => {
-        const rate = getDayRate(item.summary, day) || 0;
-        if (rate > max) max = rate;
-      });
-    });
-    return max || 0.0001;
-  }, [heatmapRows]);
+  const channelHeatmapRows = useMemo(() => {
+    const rowsByChannel = buildDayGmvHeatmapRows(filteredRows, 'channelId', channelHeatmapSort);
+    if (channelTopN === 'all') return rowsByChannel;
+    return rowsByChannel.slice(0, channelTopN);
+  }, [filteredRows, channelHeatmapSort, channelTopN]);
+  const channelHeatmapMax = useMemo(() => getHeatmapMaxValue(channelHeatmapRows), [channelHeatmapRows]);
 
   const dayRateDefs = [
     { key: 'd4Rate', label: 'D4转化率', color: '#1d4ed8' },
@@ -357,6 +391,11 @@ export function ChannelDetailPage({ rows, upload, viewMode = 'all' }: ChannelDet
     setShowCurrentFormula(false);
     setShowRatioFormula(false);
     setBlockOneTab('all');
+    setOwnerHeatmapSort('closedRate');
+    setChannelHeatmapSort('closedRate');
+    setChannelTopN(10);
+    setStructureScope('latest');
+    setStructurePanelVisible(true);
   }, [upload?.id, upload]);
 
   const visibleMetricOrder = metricOrder.filter((key) => metricVisible.includes(key));
@@ -486,55 +525,96 @@ export function ChannelDetailPage({ rows, upload, viewMode = 'all' }: ChannelDet
             {viewMode === 'block2' ? null : <h3 className="text-base font-semibold text-ink">板块一：整体转化波动</h3>}
             {viewMode === 'block2' ? null : (
             <div className="panel bg-white p-3">
-              <div className="grid w-full gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-1 sm:grid-cols-2 lg:grid-cols-4">
-                {[
-                  { key: 'all' as const, label: '全部' },
-                  { key: 'day' as const, label: 'D4～D10单日转化率' },
-                  { key: 'current' as const, label: '当期成交占比' },
-                  { key: 'ratio' as const, label: '追单占比趋势' },
-                ].map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => setBlockOneTab(item.key)}
-                    className={`h-10 w-full rounded-xl px-3 py-2 text-sm transition ${
-                      blockOneTab === item.key
-                        ? 'bg-[#2f7bf6] font-semibold text-white shadow-sm ring-1 ring-[#2a6edf]'
-                        : 'font-medium text-slate-600 hover:bg-white/70'
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
+              <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                <div className="grid w-full gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-1 sm:grid-cols-2 lg:grid-cols-4 lg:max-w-[860px]">
+                  {[
+                    { key: 'all' as const, label: '全部' },
+                    { key: 'day' as const, label: 'D4～D10单日转化率' },
+                    { key: 'current' as const, label: '当期成交占比' },
+                    { key: 'ratio' as const, label: '追单占比趋势' },
+                  ].map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => setBlockOneTab(item.key)}
+                      className={`h-10 w-full rounded-xl px-3 py-2 text-sm transition ${
+                        blockOneTab === item.key
+                          ? 'bg-[#2f7bf6] font-semibold text-white shadow-sm ring-1 ring-[#2a6edf]'
+                          : 'font-medium text-slate-600 hover:bg-white/70'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className={`shrink-0 rounded-xl border px-3 py-2 text-sm transition lg:hidden ${
+                    structurePanelVisible
+                      ? 'border-sky-300 bg-sky-50 text-sky-700'
+                      : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                  onClick={() => setStructurePanelVisible((prev) => !prev)}
+                >
+                  {structurePanelVisible ? '隐藏成交结构' : '显示成交结构'}
+                </button>
               </div>
             </div>
             )}
 
-            {viewMode !== 'block2' && (blockOneTab === 'all' || blockOneTab === 'day') ? (
-              <ChartCard
-                title="D4～D10 单日转化率趋势（营期）"
-                subtitle="默认重点观察 D4、D7、D10，可切换单日折线观察波动。"
-                headerExtra={
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 rounded-md border border-line px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"
-                    onClick={() => setShowDayFormula((prev) => !prev)}
-                  >
-                    <Settings2 size={12} />
-                    公式校验
-                  </button>
-                }
-              >
-                {showDayFormula ? <ChannelFormulaPanel mode="day-rate" summary={summary} upload={upload} /> : null}
-                <LegendLineChart
-                  data={dayRateData}
-                  defs={dayRateDefs}
-                  visible={chartConfig.dayRateVisible}
-                  valueType="percent"
-                  onVisibleChange={(next) => setChartConfig((prev) => ({ ...prev, dayRateVisible: next }))}
-                  defaultVisible={DEFAULT_DAY_RATE_VISIBLE}
-                />
-              </ChartCard>
+            {viewMode !== 'block2' ? (
+              <div className="relative">
+                <button
+                  type="button"
+                  className={`absolute -right-2 top-1/2 z-20 hidden -translate-y-1/2 rounded-l-xl border border-r-0 px-2 py-3 text-xs shadow-sm transition lg:inline-flex lg:flex-col lg:items-center lg:gap-0.5 ${
+                    structurePanelVisible
+                      ? 'border-sky-300 bg-sky-50 text-sky-700'
+                      : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                  onClick={() => setStructurePanelVisible((prev) => !prev)}
+                >
+                  <span>成交</span>
+                  <span>结构</span>
+                </button>
+                <div className={`grid gap-4 ${structurePanelVisible ? 'xl:grid-cols-[minmax(0,1fr)_340px]' : 'grid-cols-1'}`}>
+                <div>
+                  {blockOneTab === 'all' || blockOneTab === 'day' ? (
+                    <ChartCard
+                      title="D4～D10 单日转化率趋势（营期）"
+                      subtitle="默认重点观察 D4、D7、D10，可切换单日折线观察波动。"
+                      headerExtra={
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded-md border border-line px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                          onClick={() => setShowDayFormula((prev) => !prev)}
+                        >
+                          <Settings2 size={12} />
+                          公式校验
+                        </button>
+                      }
+                    >
+                      {showDayFormula ? <ChannelFormulaPanel mode="day-rate" summary={summary} upload={upload} /> : null}
+                      <LegendLineChart
+                        data={dayRateData}
+                        defs={dayRateDefs}
+                        visible={chartConfig.dayRateVisible}
+                        valueType="percent"
+                        onVisibleChange={(next) => setChartConfig((prev) => ({ ...prev, dayRateVisible: next }))}
+                        defaultVisible={DEFAULT_DAY_RATE_VISIBLE}
+                      />
+                    </ChartCard>
+                  ) : null}
+                </div>
+                {structurePanelVisible ? (
+                  <StructureDonutCard
+                    scope={structureScope}
+                    onScopeChange={setStructureScope}
+                    campaignLabel={latestCampaignPoint?.campaign ?? ''}
+                    data={structureData}
+                  />
+                ) : null}
+                </div>
+              </div>
             ) : null}
 
             {viewMode !== 'block2' && (blockOneTab === 'all' || blockOneTab === 'current') ? (
@@ -594,139 +674,27 @@ export function ChannelDetailPage({ rows, upload, viewMode = 'all' }: ChannelDet
 
           {viewMode === 'block1' ? null : (
           <section className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-base font-semibold text-ink">板块二：个人 / 渠道拆解</h3>
-              <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1">
-                {[
-                  { key: 'owner' as const, label: '按渠道归属人' },
-                  { key: 'channelId' as const, label: '按渠道号' },
-                  { key: 'category' as const, label: '按分类' },
-                ].map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => setChartConfig((prev) => ({ ...prev, dimension: item.key }))}
-                    className={`rounded-lg px-3 py-1.5 text-sm ${chartConfig.dimension === item.key ? 'bg-sky-50 font-semibold text-sky-700 ring-1 ring-sky-200' : 'text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <ChartCard title={`${dimensionLabel(chartConfig.dimension)}封板转化率排名`} subtitle="同时对比封板GMV、leads数与封板ROI。">
-              <div className="h-[420px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={rankData} margin={{ left: 8, right: 12, top: 12, bottom: 12 }}>
-                    <CartesianGrid strokeDasharray="2 4" stroke="#e7ebf0" strokeOpacity={0.6} />
-                    <XAxis dataKey="key" tick={{ fill: '#64748b', fontSize: 12 }} angle={-22} textAnchor="end" height={78} interval={0} />
-                    <YAxis yAxisId="left" tickFormatter={(value) => `${value * 100}%`} tick={{ fill: '#64748b', fontSize: 12 }} />
-                    <YAxis yAxisId="right" orientation="right" tickFormatter={(value) => formatMoney(Number(value))} tick={{ fill: '#64748b', fontSize: 12 }} />
-                    <Tooltip
-                      content={({ active, payload, label }) => {
-                        if (!active || !payload?.length) return null;
-                        const row = rankData.find((item) => item.key === label);
-                        return (
-                          <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
-                            <div className="mb-1 font-medium text-ink">{String(label)}</div>
-                            <div className="text-slate-600">封板转化率：{formatPercent(row?.closedRate ?? null, 2)}</div>
-                            <div className="text-slate-600">封板GMV：{formatMoney(row?.closedGmv ?? null)}</div>
-                            <div className="text-slate-600">leads数：{formatMoney(row?.leads ?? null)}</div>
-                            <div className="text-slate-600">封板ROI：{formatRatio(row?.closedRoi ?? null, 2)}</div>
-                          </div>
-                        );
-                      }}
-                    />
-                    <Bar yAxisId="left" dataKey="closedRate" name="封板转化率" fill="#5b8def" radius={[6, 6, 0, 0]}>
-                      <LabelList dataKey="closedRate" position="top" formatter={(value: number) => formatPercent(value, 1)} fontSize={12} fill="#5b8def" />
-                    </Bar>
-                    <Bar yAxisId="right" dataKey="closedGmv" name="封板GMV" fill="#4db6ac" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </ChartCard>
-
-            <ChartCard title="D4～D10 单日转化率热力图" subtitle="支持维度切换和排序，颜色越深表示单日转化率越高。">
-              <div className="mb-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">
-                <span className="text-xs text-slate-600">排序：</span>
-                {[
-                  { key: 'closedRate' as const, label: '封板转化率' },
-                  { key: 'd4Rate' as const, label: 'D4转化率' },
-                  { key: 'followRatio' as const, label: '追单占比' },
-                ].map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    className={`rounded px-2 py-1 text-xs ${chartConfig.heatmapSort === item.key ? 'bg-sky-100 text-sky-700' : 'text-slate-600 hover:bg-white'}`}
-                    onClick={() => setChartConfig((prev) => ({ ...prev, heatmapSort: item.key }))}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-              <div className="overflow-auto">
-                <table className="min-w-full border-separate border-spacing-0 text-sm">
-                  <thead className="sticky top-0 bg-[#f1f5fb] text-xs text-slate-600">
-                    <tr>
-                      <th className="border-b border-line px-3 py-2 text-left font-semibold">{dimensionLabel(chartConfig.dimension)}</th>
-                      {DAY_KEYS.map((day) => (
-                        <th key={day} className="border-b border-line px-3 py-2 text-right font-semibold">{`D${day}`}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {heatmapRows.map((item) => (
-                      <tr key={item.key} className="hover:bg-slate-50/70">
-                        <td className="border-b border-line px-3 py-2 text-sm font-medium text-slate-700">{item.key}</td>
-                        {DAY_KEYS.map((day) => {
-                          const value = getDayRate(item.summary, day);
-                          return (
-                            <td
-                              key={day}
-                              className="border-b border-line px-3 py-2 text-right tabular-nums"
-                              style={{ background: heatColor(value, heatmapMax) }}
-                              title={value === null ? '-' : formatPercent(value, 2)}
-                            >
-                              {formatPercent(value, 1)}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </ChartCard>
-
-            <ChartCard title="主转化期与追单期贡献对比" subtitle="判断维度项是靠 D4～D7 主转化，还是依赖 D8～D10 追单补量。">
-              <div className="h-[420px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={compareData} margin={{ left: 8, right: 12, top: 12, bottom: 12 }}>
-                    <CartesianGrid strokeDasharray="2 4" stroke="#e7ebf0" strokeOpacity={0.6} />
-                    <XAxis dataKey="key" tick={{ fill: '#64748b', fontSize: 12 }} angle={-22} textAnchor="end" height={78} interval={0} />
-                    <YAxis yAxisId="left" tickFormatter={(value) => formatMoney(Number(value))} tick={{ fill: '#64748b', fontSize: 12 }} />
-                    <YAxis yAxisId="right" orientation="right" tickFormatter={(value) => `${(Number(value) * 100).toFixed(0)}%`} tick={{ fill: '#64748b', fontSize: 12 }} />
-                    <Tooltip
-                      content={({ active, payload, label }) => {
-                        if (!active || !payload?.length) return null;
-                        const row = compareData.find((item) => item.key === label);
-                        return (
-                          <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
-                            <div className="mb-1 font-medium text-ink">{String(label)}</div>
-                            <div className="text-slate-600">当期成交GMV：{formatMoney(row?.currentGmv ?? null)}</div>
-                            <div className="text-slate-600">追单GMV：{formatMoney(row?.followGmv ?? null)}</div>
-                            <div className="text-slate-600">追单占比：{formatPercent(row?.followRatio ?? null, 2)}</div>
-                          </div>
-                        );
-                      }}
-                    />
-                    <Bar yAxisId="left" dataKey="currentGmv" name="当期成交GMV" fill="#5b8def" radius={[6, 6, 0, 0]} />
-                    <Bar yAxisId="left" dataKey="followGmv" name="追单GMV" fill="#4db6ac" radius={[6, 6, 0, 0]} />
-                    <Bar yAxisId="right" dataKey="followRatio" name="追单占比" fill="#a78bfa" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </ChartCard>
+            <h3 className="text-base font-semibold text-ink">板块二：个人 / 渠道拆解</h3>
+            <ConversionTableCard
+              title="渠道归属人 D4～D10 成交转化表"
+              subtitle="按渠道归属人拆解 D4～D10 每日成交 GMV 与单日转化率，定位个人维度的成交贡献与转化波动。"
+              dimensionLabel="渠道归属人"
+              rows={ownerHeatmapRows}
+              maxValue={ownerHeatmapMax}
+              sortKey={ownerHeatmapSort}
+              onSortKeyChange={setOwnerHeatmapSort}
+            />
+            <ConversionTableCard
+              title="渠道号 D4～D10 成交转化表"
+              subtitle="按渠道号拆解 D4～D10 每日成交 GMV 与单日转化率，定位具体渠道的成交贡献和波动。"
+              dimensionLabel="渠道号"
+              rows={channelHeatmapRows}
+              maxValue={channelHeatmapMax}
+              sortKey={channelHeatmapSort}
+              onSortKeyChange={setChannelHeatmapSort}
+              topN={channelTopN}
+              onTopNChange={setChannelTopN}
+            />
           </section>
           )}
         </>
@@ -1030,7 +998,7 @@ function LegendLineChart({
   const activeDefs = defs.filter((item) => visible[item.key]);
   if (!data.length) return <div className="py-16 text-center text-sm text-muted">暂无可展示数据</div>;
   return (
-    <div className="h-[392px] pt-1">
+    <div className="h-[452px] pt-1">
       <div className="mb-2 flex flex-wrap items-center justify-end gap-2 text-sm">
         {defs.map((item) => {
           const active = visible[item.key];
@@ -1053,7 +1021,7 @@ function LegendLineChart({
         })}
       </div>
       {!activeDefs.length ? (
-        <div className="flex h-[340px] items-center justify-center">
+        <div className="flex h-[388px] items-center justify-center">
           <div className="rounded-lg border border-slate-200 bg-white px-6 py-5 text-center shadow-sm">
             <div className="text-sm font-medium text-slate-700">当前图表暂无显示指标，请至少开启一个指标。</div>
             <button
@@ -1067,9 +1035,9 @@ function LegendLineChart({
         </div>
       ) : (
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data}>
+          <LineChart data={data} margin={{ top: 24, right: 32, bottom: 48, left: 16 }}>
             <CartesianGrid strokeDasharray="2 4" stroke="#e7ebf0" strokeOpacity={0.6} />
-            <XAxis dataKey="campaign" angle={-30} textAnchor="end" height={88} interval={0} minTickGap={8} tick={{ fill: '#64748b', fontSize: 12 }} />
+            <XAxis dataKey="campaign" angle={-28} textAnchor="end" height={74} interval={0} minTickGap={8} tick={{ fill: '#64748b', fontSize: 12 }} />
             <YAxis tickFormatter={(value) => (valueType === 'percent' ? `${(Number(value) * 100).toFixed(0)}%` : formatMoney(Number(value)))} tick={{ fill: '#64748b', fontSize: 12 }} />
             <Tooltip
               content={({ active, payload, label }) => {
@@ -1112,32 +1080,120 @@ function LegendLineChart({
   );
 }
 
-function getDayRate(summary: ChannelDetailSummary, day: 4 | 5 | 6 | 7 | 8 | 9 | 10): number | null {
-  if (day === 4) return summary.d4Rate;
-  if (day === 5) return summary.d5Rate;
-  if (day === 6) return summary.d6Rate;
-  if (day === 7) return summary.d7Rate;
-  if (day === 8) return summary.d8Rate;
-  if (day === 9) return summary.d9Rate;
-  return summary.d10Rate;
-}
+function StructureDonutCard({
+  scope,
+  onScopeChange,
+  campaignLabel,
+  data,
+}: {
+  scope: StructureScope;
+  onScopeChange: (next: StructureScope) => void;
+  campaignLabel: string;
+  data: {
+    currentGmv: number;
+    followGmv: number;
+    totalGmv: number;
+    currentRatio: number;
+    followRatio: number;
+  } | null;
+}) {
+  const pieData = data
+    ? [
+        { name: '当期成交', value: data.currentGmv, ratio: data.currentRatio, color: '#4F8FD9' },
+        { name: '追单成交', value: data.followGmv, ratio: data.followRatio, color: '#F59E0B' },
+      ]
+    : [];
 
-function dimensionLabel(key: DimensionKey): string {
-  if (key === 'owner') return '渠道归属人';
-  if (key === 'channelId') return '渠道号';
-  return '分类';
+  return (
+    <ChartCard
+      title="当期 / 追单成交结构"
+      subtitle="观察 D4～D7 当期成交与 D8～D10 追单成交在封板成交中的占比。"
+      headerExtra={
+        <div className="flex items-center gap-2">
+          <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
+            <button
+              type="button"
+              className={`rounded px-2 py-1 text-xs ${scope === 'latest' ? 'bg-sky-100 text-sky-700' : 'text-slate-600 hover:bg-white'}`}
+              onClick={() => onScopeChange('latest')}
+            >
+              最新营期
+            </button>
+            <button
+              type="button"
+              className={`rounded px-2 py-1 text-xs ${scope === 'filtered' ? 'bg-sky-100 text-sky-700' : 'text-slate-600 hover:bg-white'}`}
+              onClick={() => onScopeChange('filtered')}
+            >
+              当前筛选范围
+            </button>
+          </div>
+        </div>
+      }
+    >
+      {!data ? (
+        <div className="flex h-[300px] items-center justify-center text-sm text-slate-500">当前筛选范围内暂无 D4～D10 成交数据。</div>
+      ) : (
+        <div className="space-y-3">
+          {scope === 'latest' && campaignLabel ? <div className="text-xs text-slate-500">当前口径：最新营期（{campaignLabel}）</div> : null}
+          <div className="h-[250px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Tooltip
+                  formatter={(value: number, name: string, item: { payload?: { ratio?: number } }) => [
+                    `${formatMoney(value)}（${formatPercent(item?.payload?.ratio ?? null, 2)}）`,
+                    name,
+                  ]}
+                />
+                <Pie data={pieData} innerRadius={62} outerRadius={94} dataKey="value" paddingAngle={3} stroke="#fff" strokeWidth={2}>
+                  {pieData.map((entry) => (
+                    <Cell key={entry.name} fill={entry.color} />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+            <div className="text-xs text-slate-500">封板GMV</div>
+            <div className="mt-1 text-lg font-semibold text-slate-800 tabular-nums">{formatMoney(data.totalGmv)}</div>
+            <div className="mt-2 space-y-1.5 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1.5 text-slate-700"><span className="h-2 w-2 rounded-full bg-[#4F8FD9]" />当期成交</span>
+                <span className="tabular-nums text-slate-700">{formatMoney(data.currentGmv)} / {formatPercent(data.currentRatio, 1)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1.5 text-slate-700"><span className="h-2 w-2 rounded-full bg-[#F59E0B]" />追单成交</span>
+                <span className="tabular-nums text-slate-700">{formatMoney(data.followGmv)} / {formatPercent(data.followRatio, 1)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </ChartCard>
+  );
 }
 
 function heatColor(value: number | null, max: number): string {
-  if (value === null || !Number.isFinite(value) || value <= 0) return 'transparent';
-  const ratio = Math.min(1, Math.max(0.08, value / max));
+  if (value === null || !Number.isFinite(value) || value <= 0) return '#f8fafc';
+  const ratio = Math.min(1, Math.max(0.1, value / max));
   return `rgba(59, 130, 246, ${ratio.toFixed(2)})`;
 }
 
-function pickSortMetric(summary: ChannelDetailSummary, sort: HeatmapSortKey): number | null {
-  if (sort === 'd4Rate') return summary.d4Rate;
-  if (sort === 'followRatio') return summary.followRatio;
-  return summary.closedRate;
+function normalizeGmvHeatmapSort(input: unknown): GmvHeatmapSortKey {
+  if (
+    input === 'currentRate' ||
+    input === 'followRate' ||
+    input === 'closedRate' ||
+    input === 'd4gmv' || input === 'd5gmv' || input === 'd6gmv' || input === 'd7gmv' || input === 'd8gmv' || input === 'd9gmv' || input === 'd10gmv' ||
+    input === 'd4Rate' || input === 'd5Rate' || input === 'd6Rate' || input === 'd7Rate' || input === 'd8Rate' || input === 'd9Rate' || input === 'd10Rate' ||
+    input === 'currentGmv' || input === 'followGmv' || input === 'closedGmv' || input === 'followRatio'
+  ) {
+    return input;
+  }
+  return 'closedRate';
+}
+
+function normalizeTopN(input: unknown): ChannelTopN {
+  if (input === 10 || input === 20 || input === 50 || input === 'all') return input;
+  return 10;
 }
 
 function buildSummary(selected: string[]): string {
@@ -1196,6 +1252,11 @@ function normalizeChartConfig(input: unknown): ChartConfig {
 function normalizeBlockOneTab(input: unknown): BlockOneTab {
   if (input === 'all' || input === 'day' || input === 'current' || input === 'ratio') return input;
   return 'all';
+}
+
+function normalizeStructureScope(input: unknown): StructureScope {
+  if (input === 'latest' || input === 'filtered') return input;
+  return 'latest';
 }
 
 function normalizeBool(input: unknown, fallback = false): boolean {
@@ -1270,6 +1331,305 @@ function channelFieldStatus(upload?: ChannelDetailUploadRecord): '已识别' | '
   if (hit === required.length) return '已识别';
   if (hit > 0) return '部分识别';
   return '未识别';
+}
+
+type HeatmapGmvRow = {
+  key: string;
+  leads: number;
+  d4gmv: number;
+  d5gmv: number;
+  d6gmv: number;
+  d7gmv: number;
+  d8gmv: number;
+  d9gmv: number;
+  d10gmv: number;
+  d4Rate: number | null;
+  d5Rate: number | null;
+  d6Rate: number | null;
+  d7Rate: number | null;
+  d8Rate: number | null;
+  d9Rate: number | null;
+  d10Rate: number | null;
+  currentGmv: number;
+  currentRate: number | null;
+  followGmv: number;
+  followRate: number | null;
+  closedGmv: number;
+  closedRate: number | null;
+  followRatio: number | null;
+};
+
+function buildDayGmvHeatmapRows(rows: ChannelDetailRow[], dimension: 'owner' | 'channelId', sortKey: GmvHeatmapSortKey): HeatmapGmvRow[] {
+  const grouped = new Map<string, HeatmapGmvRow>();
+  rows.forEach((row) => {
+    const key = (dimension === 'owner' ? row.owner : row.channelId) || '未填写';
+    const current = grouped.get(key) || {
+      key,
+      leads: 0,
+      d4gmv: 0,
+      d5gmv: 0,
+      d6gmv: 0,
+      d7gmv: 0,
+      d8gmv: 0,
+      d9gmv: 0,
+      d10gmv: 0,
+      d4Rate: null,
+      d5Rate: null,
+      d6Rate: null,
+      d7Rate: null,
+      d8Rate: null,
+      d9Rate: null,
+      d10Rate: null,
+      currentGmv: 0,
+      currentRate: null,
+      followGmv: 0,
+      followRate: null,
+      closedGmv: 0,
+      closedRate: null,
+      followRatio: null,
+    };
+    current.leads += row.leads || 0;
+    current.d4gmv += row.d4gmv || 0;
+    current.d5gmv += row.d5gmv || 0;
+    current.d6gmv += row.d6gmv || 0;
+    current.d7gmv += row.d7gmv || 0;
+    current.d8gmv += row.d8gmv || 0;
+    current.d9gmv += row.d9gmv || 0;
+    current.d10gmv += row.d10gmv || 0;
+    grouped.set(key, current);
+  });
+  const withRate = Array.from(grouped.values()).map((item) => {
+    const currentGmv = item.d4gmv + item.d5gmv + item.d6gmv + item.d7gmv;
+    const followGmv = item.d8gmv + item.d9gmv + item.d10gmv;
+    const closedGmv = currentGmv + followGmv;
+    const leads = item.leads;
+    return {
+      ...item,
+      d4Rate: safeDivide(item.d4gmv, 2980 * leads),
+      d5Rate: safeDivide(item.d5gmv, 2980 * leads),
+      d6Rate: safeDivide(item.d6gmv, 2980 * leads),
+      d7Rate: safeDivide(item.d7gmv, 2980 * leads),
+      d8Rate: safeDivide(item.d8gmv, 2980 * leads),
+      d9Rate: safeDivide(item.d9gmv, 2980 * leads),
+      d10Rate: safeDivide(item.d10gmv, 2980 * leads),
+      currentGmv,
+      currentRate: safeDivide(currentGmv, 2980 * leads),
+      followGmv,
+      followRate: safeDivide(followGmv, 2980 * leads),
+      closedGmv,
+      closedRate: safeDivide(closedGmv, 2980 * leads),
+      followRatio: safeDivide(followGmv, closedGmv),
+    };
+  });
+  return withRate.sort((a, b) => toSortable(b[sortKey]) - toSortable(a[sortKey]));
+}
+
+function getHeatmapMaxValue(rows: HeatmapGmvRow[]): number {
+  let max = 0;
+  rows.forEach((row) => {
+    DAY_GMV_KEYS.forEach((k) => {
+      if ((row[k] || 0) > max) max = row[k] || 0;
+    });
+    if (row.currentGmv > max) max = row.currentGmv;
+    if (row.followGmv > max) max = row.followGmv;
+    if (row.closedGmv > max) max = row.closedGmv;
+  });
+  return max || 1;
+}
+
+function sortLabel(key: GmvHeatmapSortKey): string {
+  if (key === 'currentRate') return '当期转化率';
+  if (key === 'followRate') return '追单转化率';
+  if (key === 'closedRate') return '封板转化率';
+  return '封板转化率';
+}
+
+function formatGmvCell(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '-';
+  return formatMoney(value);
+}
+
+function ConversionTableCard({
+  title,
+  subtitle,
+  dimensionLabel,
+  rows,
+  maxValue,
+  sortKey,
+  onSortKeyChange,
+  topN,
+  onTopNChange,
+}: {
+  title: string;
+  subtitle: string;
+  dimensionLabel: string;
+  rows: HeatmapGmvRow[];
+  maxValue: number;
+  sortKey: GmvHeatmapSortKey;
+  onSortKeyChange: (key: GmvHeatmapSortKey) => void;
+  topN?: ChannelTopN;
+  onTopNChange?: (value: ChannelTopN) => void;
+}) {
+  const downloadCsv = () => {
+    exportCsv(
+      `${title}.csv`,
+      rows.map((row) => ({
+        [dimensionLabel]: row.key,
+        leads数: formatMoney(row.leads),
+        D4GMV: formatMoney(row.d4gmv),
+        D4转化率: formatPercent(row.d4Rate, 2),
+        D5GMV: formatMoney(row.d5gmv),
+        D5转化率: formatPercent(row.d5Rate, 2),
+        D6GMV: formatMoney(row.d6gmv),
+        D6转化率: formatPercent(row.d6Rate, 2),
+        D7GMV: formatMoney(row.d7gmv),
+        D7转化率: formatPercent(row.d7Rate, 2),
+        D8GMV: formatMoney(row.d8gmv),
+        D8转化率: formatPercent(row.d8Rate, 2),
+        D9GMV: formatMoney(row.d9gmv),
+        D9转化率: formatPercent(row.d9Rate, 2),
+        D10GMV: formatMoney(row.d10gmv),
+        D10转化率: formatPercent(row.d10Rate, 2),
+        当期成交GMV: formatMoney(row.currentGmv),
+        当期转化率: formatPercent(row.currentRate, 2),
+        追单GMV: formatMoney(row.followGmv),
+        追单转化率: formatPercent(row.followRate, 2),
+        封板成交GMV: formatMoney(row.closedGmv),
+        封板转化率: formatPercent(row.closedRate, 2),
+        追单占比: formatPercent(row.followRatio, 2),
+      })),
+    );
+  };
+
+  return (
+    <ChartCard title={title} subtitle={subtitle}>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">
+          <span className="text-xs text-slate-600">快捷排序：</span>
+          {(['currentRate', 'followRate', 'closedRate'] as GmvHeatmapSortKey[]).map((key) => (
+            <button
+              key={key}
+              type="button"
+              className={`rounded px-2 py-1 text-xs ${sortKey === key ? 'bg-sky-100 text-sky-700' : 'text-slate-600 hover:bg-white'}`}
+              onClick={() => onSortKeyChange(key)}
+            >
+              {sortLabel(key)}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          {onTopNChange ? (
+            <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">
+              <span className="text-xs text-slate-600">展示：</span>
+              {[10, 20, 50, 'all'].map((option) => (
+                <button
+                  key={String(option)}
+                  type="button"
+                  className={`rounded px-2 py-1 text-xs ${topN === option ? 'bg-sky-100 text-sky-700' : 'text-slate-600 hover:bg-white'}`}
+                  onClick={() => onTopNChange(option as ChannelTopN)}
+                >
+                  {option === 'all' ? '全部' : `Top ${option}`}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <button type="button" className="rounded border border-line bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50" onClick={downloadCsv}>
+            导出 CSV
+          </button>
+          <div className="inline-flex items-center gap-2 text-xs text-slate-500">
+            <span>GMV低</span>
+            <span className="h-2.5 w-24 rounded-full bg-gradient-to-r from-[#e0edff] to-[#2563eb]" />
+            <span>GMV高</span>
+            <span className="ml-2">转化率低</span>
+            <span className="h-2.5 w-24 rounded-full bg-gradient-to-r from-[#e9f8ef] to-[#22c55e]" />
+            <span>转化率高</span>
+          </div>
+        </div>
+      </div>
+      <div className="max-h-[540px] overflow-auto">
+        <table className="min-w-[2200px] border-separate border-spacing-0 text-sm">
+          <thead className="sticky top-0 z-10 bg-[#f1f5fb] text-xs text-slate-600">
+            <tr>
+              <th className="sticky left-0 z-20 border-b border-line bg-[#f1f5fb] px-3 py-2 text-left font-semibold">{dimensionLabel}</th>
+              <th className="border-b border-line px-3 py-2 text-right font-semibold">leads数</th>
+              {([4, 5, 6, 7, 8, 9, 10] as const).map((day) => (
+                <th key={`gmv-${day}`} className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortKeyChange(`d${day}gmv` as GmvHeatmapSortKey)}>
+                  {`D${day} GMV`}
+                </th>
+              ))}
+              {([4, 5, 6, 7, 8, 9, 10] as const).map((day) => (
+                <th key={`rate-${day}`} className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortKeyChange(`d${day}Rate` as GmvHeatmapSortKey)}>
+                  {`D${day} 转化率`}
+                </th>
+              ))}
+              <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortKeyChange('currentGmv')}>当期成交GMV</th>
+              <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortKeyChange('currentRate')}>当期转化率</th>
+              <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortKeyChange('followGmv')}>追单GMV</th>
+              <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortKeyChange('followRate')}>追单转化率</th>
+              <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortKeyChange('closedGmv')}>封板成交GMV</th>
+              <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortKeyChange('closedRate')}>封板转化率</th>
+              <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortKeyChange('followRatio')}>追单占比</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.key} className="hover:bg-slate-50/70">
+                <td className="sticky left-0 z-[1] border-b border-line bg-white px-3 py-2 text-sm font-medium text-slate-700">{row.key}</td>
+                <td className="border-b border-line px-3 py-2 text-right tabular-nums">{formatMoney(row.leads)}</td>
+                {DAY_GMV_KEYS.map((key) => (
+                  <td
+                    key={key}
+                    className="border-b border-line px-3 py-2 text-right tabular-nums"
+                    style={{ background: heatColor(row[key], maxValue) }}
+                    title={`${dimensionLabel}：${row.key}\n日期：${key.toUpperCase().replace('GMV', '')}\n成交GMV：${formatMoney(row[key])}`}
+                  >
+                    {formatGmvCell(row[key])}
+                  </td>
+                ))}
+                {(['d4Rate', 'd5Rate', 'd6Rate', 'd7Rate', 'd8Rate', 'd9Rate', 'd10Rate'] as const).map((key) => (
+                  <td
+                    key={key}
+                    className="border-b border-line px-3 py-2 text-right tabular-nums"
+                    style={{ background: rateHeatColor(row[key]) }}
+                    title={`${dimensionLabel}：${row.key}\n日期：${key.slice(0, 2).toUpperCase()}\n转化率：${formatPercent(row[key], 2)}\nleads数：${formatMoney(row.leads)}`}
+                  >
+                    {formatPercent(row[key], 2)}
+                  </td>
+                ))}
+                <td
+                  className="border-b border-line px-3 py-2 text-right tabular-nums font-semibold"
+                  style={{ background: heatColor(row.currentGmv, maxValue) }}
+                >
+                  {formatGmvCell(row.currentGmv)}
+                </td>
+                <td className="border-b border-line px-3 py-2 text-right tabular-nums" style={{ background: rateHeatColor(row.currentRate) }}>{formatPercent(row.currentRate, 2)}</td>
+                <td className="border-b border-line px-3 py-2 text-right tabular-nums font-semibold" style={{ background: heatColor(row.followGmv, maxValue) }}>{formatGmvCell(row.followGmv)}</td>
+                <td className="border-b border-line px-3 py-2 text-right tabular-nums" style={{ background: rateHeatColor(row.followRate) }}>{formatPercent(row.followRate, 2)}</td>
+                <td className="border-b border-line px-3 py-2 text-right tabular-nums font-semibold" style={{ background: heatColor(row.closedGmv, maxValue) }}>{formatGmvCell(row.closedGmv)}</td>
+                <td className="border-b border-line px-3 py-2 text-right tabular-nums" style={{ background: rateHeatColor(row.closedRate) }}>{formatPercent(row.closedRate, 2)}</td>
+                <td className="border-b border-line px-3 py-2 text-right tabular-nums">{formatPercent(row.followRatio, 2)}</td>
+              </tr>
+            ))}
+            {!rows.length ? (
+              <tr>
+                <td colSpan={24} className="px-3 py-8 text-center text-sm text-slate-500">暂无可展示数据</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    </ChartCard>
+  );
+}
+
+function toSortable(value: number | null): number {
+  return Number.isFinite(value) ? Number(value) : -1;
+}
+
+function rateHeatColor(value: number | null): string {
+  if (value === null || !Number.isFinite(value) || value <= 0) return '#f8fafc';
+  const ratio = Math.min(1, Math.max(0.08, value / 0.05));
+  return `rgba(34, 197, 94, ${ratio.toFixed(2)})`;
 }
 
 function SortableMetricCard({ id, children }: { id: string; children: ReactNode }) {

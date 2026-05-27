@@ -21,6 +21,9 @@ const defaultScenarios: Scenario[] = [
   { id: 'c', name: '方案 C：乐观方案', leads: 1000, leadCost: 40, conversionRatePct: 2.0, unitPrice: 2980 },
 ];
 
+type EditableNumericField = 'leads' | 'leadCost' | 'conversionRatePct' | 'unitPrice';
+type DraftMap = Record<string, string>;
+
 function normalizeScenarios(input: unknown): Scenario[] {
   if (!Array.isArray(input)) return defaultScenarios;
   const parsed = input
@@ -55,6 +58,7 @@ function calcMetrics(s: Scenario) {
 export function FeeCalculatorPage() {
   const [scenarios, setScenarios] = useState<Scenario[]>(() => normalizeScenarios(readStorage(STORAGE_KEY, defaultScenarios)));
   const [activeId, setActiveId] = useState<string>(() => normalizeScenarios(readStorage(STORAGE_KEY, defaultScenarios))[0]?.id || 'a');
+  const [drafts, setDrafts] = useState<DraftMap>({});
 
   useEffect(() => writeStorage(STORAGE_KEY, scenarios), [scenarios]);
 
@@ -72,6 +76,29 @@ export function FeeCalculatorPage() {
 
   const updateScenario = (id: string, patch: Partial<Scenario>) => {
     setScenarios((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  };
+
+  const draftKey = (id: string, field: EditableNumericField) => `${id}:${field}`;
+
+  const handleNumericDraftChange = (id: string, field: EditableNumericField, value: string) => {
+    setDrafts((prev) => ({ ...prev, [draftKey(id, field)]: value }));
+    if (canCommitNumber(value)) {
+      updateScenario(id, { [field]: Number(value) } as Partial<Scenario>);
+    }
+  };
+
+  const handleNumericDraftBlur = (scenario: Scenario, field: EditableNumericField) => {
+    const key = draftKey(scenario.id, field);
+    const draft = drafts[key];
+    if (draft == null) return;
+    const fallback = scenario[field];
+    const next = canCommitNumber(draft) ? Number(draft) : fallback;
+    updateScenario(scenario.id, { [field]: next } as Partial<Scenario>);
+    setDrafts((prev) => {
+      const copy = { ...prev };
+      delete copy[key];
+      return copy;
+    });
   };
 
   const addScenario = () => {
@@ -160,16 +187,36 @@ export function FeeCalculatorPage() {
                     />
                   </td>
                   <td className="border-b border-line px-3 py-2">
-                    <input value={row.leads} onChange={(e) => updateScenario(row.id, { leads: toNum(e.target.value, row.leads) })} className="w-24 rounded border border-line px-2 py-1 text-sm" />
+                    <input
+                      value={drafts[draftKey(row.id, 'leads')] ?? String(row.leads)}
+                      onChange={(e) => handleNumericDraftChange(row.id, 'leads', e.target.value)}
+                      onBlur={() => handleNumericDraftBlur(row, 'leads')}
+                      className="w-24 rounded border border-line px-2 py-1 text-sm"
+                    />
                   </td>
                   <td className="border-b border-line px-3 py-2">
-                    <input value={row.leadCost} onChange={(e) => updateScenario(row.id, { leadCost: toNum(e.target.value, row.leadCost) })} className="w-20 rounded border border-line px-2 py-1 text-sm" />
+                    <input
+                      value={drafts[draftKey(row.id, 'leadCost')] ?? String(row.leadCost)}
+                      onChange={(e) => handleNumericDraftChange(row.id, 'leadCost', e.target.value)}
+                      onBlur={() => handleNumericDraftBlur(row, 'leadCost')}
+                      className="w-20 rounded border border-line px-2 py-1 text-sm"
+                    />
                   </td>
                   <td className="border-b border-line px-3 py-2">
-                    <input value={row.conversionRatePct} onChange={(e) => updateScenario(row.id, { conversionRatePct: toNum(e.target.value, row.conversionRatePct) })} className="w-20 rounded border border-line px-2 py-1 text-sm" />
+                    <input
+                      value={drafts[draftKey(row.id, 'conversionRatePct')] ?? String(row.conversionRatePct)}
+                      onChange={(e) => handleNumericDraftChange(row.id, 'conversionRatePct', e.target.value)}
+                      onBlur={() => handleNumericDraftBlur(row, 'conversionRatePct')}
+                      className="w-20 rounded border border-line px-2 py-1 text-sm"
+                    />
                   </td>
                   <td className="border-b border-line px-3 py-2">
-                    <input value={row.unitPrice} onChange={(e) => updateScenario(row.id, { unitPrice: toNum(e.target.value, row.unitPrice) })} className="w-24 rounded border border-line px-2 py-1 text-sm" />
+                    <input
+                      value={drafts[draftKey(row.id, 'unitPrice')] ?? String(row.unitPrice)}
+                      onChange={(e) => handleNumericDraftChange(row.id, 'unitPrice', e.target.value)}
+                      onBlur={() => handleNumericDraftBlur(row, 'unitPrice')}
+                      className="w-24 rounded border border-line px-2 py-1 text-sm"
+                    />
                   </td>
                   <td className="border-b border-line px-3 py-2 tabular-nums">{formatMoney(row.deals, 1)}</td>
                   <td className="border-b border-line px-3 py-2 tabular-nums">{formatMoney(row.gmv)}</td>
@@ -192,3 +239,10 @@ export function FeeCalculatorPage() {
   );
 }
 
+function canCommitNumber(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  if (trimmed === '-' || trimmed === '.' || trimmed === '-.') return false;
+  if (trimmed.endsWith('.')) return false;
+  return Number.isFinite(Number(trimmed));
+}
