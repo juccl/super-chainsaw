@@ -203,6 +203,22 @@ export default function App() {
     return '未识别';
   })();
 
+  const dataSourceSummary = (() => {
+    const nowLabel = new Date().toLocaleString('zh-CN');
+    if (page === 'channel-detail' || page === 'channel-breakdown') {
+      return {
+        kind: 'channel' as const,
+        text: `数据源：渠道明细数据｜清洗后 ${channelRows.length.toLocaleString('zh-CN')} 行｜已缓存｜更新时间 ${channelUpload?.uploadedAt ? new Date(channelUpload.uploadedAt).toLocaleString('zh-CN') : nowLabel}`,
+        warning: channelFieldStatus === '未识别' || channelFieldStatus === '部分识别' ? '字段识别异常，请检查数据源字段映射。' : undefined,
+      };
+    }
+    return {
+      kind: 'overview' as const,
+      text: `数据源：业务经营数据｜清洗后 ${rows.length.toLocaleString('zh-CN')} 行｜已缓存｜更新时间 ${upload?.uploadedAt ? new Date(upload.uploadedAt).toLocaleString('zh-CN') : nowLabel}`,
+      warning: overviewFieldStatus === '未识别' || overviewFieldStatus === '部分识别' ? '字段识别异常，请检查数据源字段映射。' : undefined,
+    };
+  })();
+
   return (
     <Layout
       page={page}
@@ -220,6 +236,7 @@ export default function App() {
       onUploadChannel={handleChannelUpload}
       onClearOverviewData={clearOverviewData}
       onClearChannelData={clearChannelData}
+      dataSourceSummary={dataSourceSummary}
     >
       {message ? (
         <div className="mb-4 rounded-md border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">

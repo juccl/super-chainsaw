@@ -62,6 +62,7 @@ const STORAGE = {
   channelHeatmapTopN: 'channelDetail_channel_heatmap_topn',
   structureScope: 'channelDetail_structure_scope',
   structurePanelVisible: 'channelDetail_structurePanelVisible',
+  breakdownActiveTab: 'channelDetail_breakdownActiveTab',
 };
 
 type DimensionKey = 'owner' | 'channelId' | 'category';
@@ -92,6 +93,7 @@ type GmvHeatmapSortKey =
 type ChannelTopN = 10 | 20 | 50 | 'all';
 type StructureScope = 'latest' | 'filtered';
 type TableViewMode = 'gmv' | 'conversion';
+type BreakdownTab = 'owner' | 'channel';
 type TableSortField =
   | 'leads'
   | 'currentRate'
@@ -293,6 +295,9 @@ export function ChannelDetailPage({ rows, upload, viewMode = 'all' }: ChannelDet
   const [structurePanelVisible, setStructurePanelVisible] = useState<boolean>(
     () => normalizeBool(readStorage(STORAGE.structurePanelVisible, true), true),
   );
+  const [breakdownActiveTab, setBreakdownActiveTab] = useState<BreakdownTab>(
+    () => normalizeBreakdownTab(readStorage(STORAGE.breakdownActiveTab, 'owner')),
+  );
   const [showMetricSettings, setShowMetricSettings] = useState(false);
   const [metricVisible, setMetricVisible] = useState<ChannelMetricKey[]>(
     () => normalizeMetricKeys(readStorage(STORAGE.metricCardConfig, CHANNEL_METRIC_DEFAULT_VISIBLE), CHANNEL_METRIC_DEFAULT_VISIBLE),
@@ -323,6 +328,7 @@ export function ChannelDetailPage({ rows, upload, viewMode = 'all' }: ChannelDet
   useEffect(() => writeStorage(STORAGE.channelHeatmapTopN, channelTopN), [channelTopN]);
   useEffect(() => writeStorage(STORAGE.structureScope, structureScope), [structureScope]);
   useEffect(() => writeStorage(STORAGE.structurePanelVisible, structurePanelVisible), [structurePanelVisible]);
+  useEffect(() => writeStorage(STORAGE.breakdownActiveTab, breakdownActiveTab), [breakdownActiveTab]);
 
   const options = useMemo(() => channelDetailFilterOptions(rows), [rows]);
   const filteredRows = useMemo(() => applyChannelDetailFilters(rows, filters), [rows, filters]);
@@ -436,6 +442,7 @@ export function ChannelDetailPage({ rows, upload, viewMode = 'all' }: ChannelDet
     setChannelTopN(10);
     setStructureScope('latest');
     setStructurePanelVisible(true);
+    setBreakdownActiveTab('owner');
   }, [upload?.id, upload]);
 
   const visibleMetricOrder = metricOrder.filter((key) => metricVisible.includes(key));
@@ -450,19 +457,11 @@ export function ChannelDetailPage({ rows, upload, viewMode = 'all' }: ChannelDet
   };
   return (
     <div className="space-y-4">
-      <section className="panel bg-white p-4">
-        <h2 className="text-lg font-semibold text-ink">渠道经营明细</h2>
-        <p className="mt-1 text-sm text-muted">观察渠道营期 D4～D10 单日转化表现，拆解当期转化、追单转化与封板转化。</p>
-        <div className="mt-3 grid gap-2 rounded-xl border border-sky-200 bg-sky-50/40 p-3 text-xs text-slate-600 md:grid-cols-2 xl:grid-cols-4">
-          <div>文件名：{upload?.fileName || '-'}</div>
-          <div>上传时间：{upload?.uploadedAt ? new Date(upload.uploadedAt).toLocaleString('zh-CN') : '-'}</div>
-          <div>原始行数：{upload?.rawRows ? upload.rawRows.toLocaleString('zh-CN') : '-'}</div>
-          <div>清洗后行数：{upload?.cleanedRows ? upload.cleanedRows.toLocaleString('zh-CN') : '-'}</div>
-          <div>过滤行数：{upload?.filteredRows ? upload.filteredRows.toLocaleString('zh-CN') : '-'}</div>
-          <div>字段识别状态：{channelFieldStatus(upload)}</div>
-          <div className="md:col-span-2 xl:col-span-2">状态：{upload ? '已启用本地缓存，刷新后自动恢复数据' : '-'}</div>
-        </div>
-      </section>
+      {upload ? (
+        <section className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs text-slate-600 shadow-sm">
+          当前渠道明细数据：{upload.fileName || '-'} ｜ 清洗后 {upload.cleanedRows?.toLocaleString('zh-CN') || 0} 行 ｜ 已缓存
+        </section>
+      ) : null}
       {rows.length === 0 ? (
         <section className="panel bg-white p-8 text-center">
           <div className="text-base font-medium text-slate-700">请先上传渠道经营明细数据表</div>
@@ -715,30 +714,51 @@ export function ChannelDetailPage({ rows, upload, viewMode = 'all' }: ChannelDet
           {viewMode === 'block1' ? null : (
           <section className="space-y-4">
             <h3 className="text-base font-semibold text-ink">板块二：个人 / 渠道拆解</h3>
-            <ConversionTableCard
-              title="渠道归属人 D4～D10 成交转化表"
-              subtitle="按渠道归属人拆解 D4～D10 每日成交 GMV 与单日转化率，定位个人维度的成交贡献与转化波动。"
-              dimensionLabel="渠道归属人"
-              rows={ownerHeatmapRows}
-              maxValue={ownerHeatmapMax}
-              viewMode={ownerTableViewMode}
-              onViewModeChange={setOwnerTableViewMode}
-              sortState={ownerTableSort}
-              onSortStateChange={setOwnerTableSort}
-            />
-            <ConversionTableCard
-              title="渠道号 D4～D10 成交转化表"
-              subtitle="按渠道号拆解 D4～D10 每日成交 GMV 与单日转化率，定位具体渠道的成交贡献和波动。"
-              dimensionLabel="渠道号"
-              rows={channelHeatmapRows}
-              maxValue={channelHeatmapMax}
-              viewMode={channelTableViewMode}
-              onViewModeChange={setChannelTableViewMode}
-              sortState={channelTableSort}
-              onSortStateChange={setChannelTableSort}
-              topN={channelTopN}
-              onTopNChange={setChannelTopN}
-            />
+            <p className="text-sm text-slate-500">按渠道归属人和渠道号拆解 D4～D10 成交 GMV、单日转化率与封板转化表现。</p>
+            <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+              <button
+                type="button"
+                className={`rounded-lg px-3 py-1.5 text-sm ${breakdownActiveTab === 'owner' ? 'bg-sky-100 text-sky-700' : 'text-slate-600 hover:bg-white'}`}
+                onClick={() => setBreakdownActiveTab('owner')}
+              >
+                渠道归属人
+              </button>
+              <button
+                type="button"
+                className={`rounded-lg px-3 py-1.5 text-sm ${breakdownActiveTab === 'channel' ? 'bg-sky-100 text-sky-700' : 'text-slate-600 hover:bg-white'}`}
+                onClick={() => setBreakdownActiveTab('channel')}
+              >
+                渠道号明细
+              </button>
+            </div>
+
+            {breakdownActiveTab === 'owner' ? (
+              <ConversionTableCard
+                title="渠道归属人 D4～D10 成交转化表"
+                subtitle="按渠道归属人拆解 D4～D10 每日成交 GMV 与单日转化率，定位个人维度的成交贡献与转化波动。"
+                dimensionLabel="渠道归属人"
+                rows={ownerHeatmapRows}
+                maxValue={ownerHeatmapMax}
+                viewMode={ownerTableViewMode}
+                onViewModeChange={setOwnerTableViewMode}
+                sortState={ownerTableSort}
+                onSortStateChange={setOwnerTableSort}
+              />
+            ) : (
+              <ConversionTableCard
+                title="渠道号 D4～D10 成交转化表"
+                subtitle="按渠道号拆解 D4～D10 每日成交 GMV 与单日转化率，定位具体渠道的成交贡献和波动。"
+                dimensionLabel="渠道号"
+                rows={channelHeatmapRows}
+                maxValue={channelHeatmapMax}
+                viewMode={channelTableViewMode}
+                onViewModeChange={setChannelTableViewMode}
+                sortState={channelTableSort}
+                onSortStateChange={setChannelTableSort}
+                topN={channelTopN}
+                onTopNChange={setChannelTopN}
+              />
+            )}
           </section>
           )}
         </>
@@ -1354,6 +1374,10 @@ function normalizeStructureScope(input: unknown): StructureScope {
   return 'latest';
 }
 
+function normalizeBreakdownTab(input: unknown): BreakdownTab {
+  return input === 'channel' ? 'channel' : 'owner';
+}
+
 function normalizeBool(input: unknown, fallback = false): boolean {
   return typeof input === 'boolean' ? input : fallback;
 }
@@ -1618,9 +1642,10 @@ function ConversionTableCard({
 
   return (
     <ChartCard title={title} subtitle={subtitle}>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">
-          <span className="text-xs text-slate-600">快捷排序：</span>
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
+          <div className="mb-1 text-[11px] font-medium text-slate-500">排序</div>
+          <div className="inline-flex items-center gap-1">
           {(['leads', 'currentRate', 'followRate', 'closedRate'] as TableSortField[]).map((key) => (
             <button
               key={key}
@@ -1632,9 +1657,12 @@ function ConversionTableCard({
               {sortState.field === key ? (sortState.direction === 'desc' ? '↓' : '↑') : ''}
             </button>
           ))}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
+        <div className="flex flex-wrap items-start gap-3">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
+            <div className="mb-1 text-[11px] font-medium text-slate-500">视图</div>
+            <div className="inline-flex items-center gap-1">
             <button
               type="button"
               className={`rounded px-2 py-1 text-xs ${viewMode === 'gmv' ? 'bg-sky-100 text-sky-700' : 'text-slate-600 hover:bg-white'}`}
@@ -1649,10 +1677,12 @@ function ConversionTableCard({
             >
               转化率视图
             </button>
+            </div>
           </div>
           {onTopNChange ? (
-            <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">
-              <span className="text-xs text-slate-600">展示：</span>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
+              <div className="mb-1 text-[11px] font-medium text-slate-500">操作</div>
+              <div className="inline-flex items-center gap-1">
               {[10, 20, 50, 'all'].map((option) => (
                 <button
                   key={String(option)}
@@ -1663,53 +1693,73 @@ function ConversionTableCard({
                   {option === 'all' ? '全部' : `Top ${option}`}
                 </button>
               ))}
+              </div>
             </div>
           ) : null}
-          <button type="button" className="rounded border border-line bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50" onClick={downloadCsv}>
-            导出 CSV
-          </button>
-          <div className="inline-flex items-center gap-2 text-xs text-slate-500">
-            {viewMode === 'gmv' ? (
-              <>
-                <span>GMV低</span>
-                <span className="h-2.5 w-24 rounded-full bg-gradient-to-r from-[#e0edff] to-[#2563eb]" />
-                <span>GMV高</span>
-              </>
-            ) : (
-              <>
-                <span>转化率低</span>
-                <span className="h-2.5 w-24 rounded-full bg-gradient-to-r from-[#e9f8ef] to-[#22c55e]" />
-                <span>转化率高</span>
-              </>
-            )}
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
+            <div className="mb-1 text-[11px] font-medium text-slate-500">操作</div>
+            <div className="inline-flex items-center gap-2 text-xs text-slate-500">
+              <button type="button" className="rounded border border-line bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50" onClick={downloadCsv}>
+                导出 CSV
+              </button>
+              {viewMode === 'gmv' ? (
+                <>
+                  <span>GMV低</span>
+                  <span className="h-2.5 w-24 rounded-full bg-gradient-to-r from-[#e0edff] to-[#2563eb]" />
+                  <span>GMV高</span>
+                </>
+              ) : (
+                <>
+                  <span>转化率低</span>
+                  <span className="h-2.5 w-24 rounded-full bg-gradient-to-r from-[#e9f8ef] to-[#22c55e]" />
+                  <span>转化率高</span>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
       <div className="max-h-[540px] overflow-auto">
-        <table className={`border-separate border-spacing-0 text-sm ${viewMode === 'gmv' ? 'min-w-[1600px]' : 'min-w-[1600px]'}`}>
+        <table className="min-w-[1600px] border-separate border-spacing-0 text-sm">
           <thead className="sticky top-0 z-10 bg-[#f1f5fb] text-xs text-slate-600">
+            <tr>
+              <th className="sticky left-0 z-30 border-b border-line bg-[#e9eff9] px-3 py-2 text-left font-semibold" colSpan={2}>基础信息</th>
+              <th className="border-b border-line bg-[#e9eff9] px-3 py-2 text-center font-semibold" colSpan={5}>当期转化 D4～D7</th>
+              <th className="border-b border-line bg-[#e9eff9] px-3 py-2 text-center font-semibold" colSpan={4}>追单转化 D8～D10</th>
+              <th className="border-b border-line bg-[#e9eff9] px-3 py-2 text-center font-semibold" colSpan={2}>封板结果</th>
+            </tr>
             <tr>
               <th className="sticky left-0 z-20 border-b border-line bg-[#f1f5fb] px-3 py-2 text-left font-semibold">{dimensionLabel}</th>
               <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange('leads')}>leads数</th>
               {viewMode === 'gmv' ? (
                 <>
-                  {([4, 5, 6, 7, 8, 9, 10] as const).map((day) => (
+                  {([4, 5, 6, 7] as const).map((day) => (
                     <th key={`gmv-${day}`} className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange(`d${day}gmv` as TableSortField)}>
                       {`D${day} GMV`}
                     </th>
                   ))}
                   <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange('currentGmv')}>当期成交GMV</th>
+                  {([8, 9, 10] as const).map((day) => (
+                    <th key={`gmv-${day}`} className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange(`d${day}gmv` as TableSortField)}>
+                      {`D${day} GMV`}
+                    </th>
+                  ))}
                   <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange('followGmv')}>追单GMV</th>
                   <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange('closedGmv')}>封板成交GMV</th>
                 </>
               ) : (
                 <>
-                  {([4, 5, 6, 7, 8, 9, 10] as const).map((day) => (
+                  {([4, 5, 6, 7] as const).map((day) => (
                     <th key={`rate-${day}`} className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange(`d${day}Rate` as TableSortField)}>
                       {`D${day} 转化率`}
                     </th>
                   ))}
                   <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange('currentRate')}>当期转化率</th>
+                  {([8, 9, 10] as const).map((day) => (
+                    <th key={`rate-${day}`} className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange(`d${day}Rate` as TableSortField)}>
+                      {`D${day} 转化率`}
+                    </th>
+                  ))}
                   <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange('followRate')}>追单转化率</th>
                   <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange('closedRate')}>封板转化率</th>
                 </>
@@ -1724,7 +1774,7 @@ function ConversionTableCard({
                 <td className="border-b border-line px-3 py-2 text-right tabular-nums">{formatMoney(row.leads)}</td>
                 {viewMode === 'gmv' ? (
                   <>
-                    {DAY_GMV_KEYS.map((key) => (
+                    {(['d4gmv', 'd5gmv', 'd6gmv', 'd7gmv'] as const).map((key) => (
                       <td
                         key={key}
                         className="border-b border-line px-3 py-2 text-right tabular-nums"
@@ -1735,12 +1785,22 @@ function ConversionTableCard({
                       </td>
                     ))}
                     <td className="border-b border-line px-3 py-2 text-right tabular-nums font-semibold" style={{ background: heatColor(row.currentGmv, maxValue) }}>{formatGmvCell(row.currentGmv)}</td>
+                    {(['d8gmv', 'd9gmv', 'd10gmv'] as const).map((key) => (
+                      <td
+                        key={key}
+                        className="border-b border-line px-3 py-2 text-right tabular-nums"
+                        style={{ background: heatColor(row[key], maxValue) }}
+                        title={`${dimensionLabel}：${row.key}\n日期：${key.toUpperCase().replace('GMV', '')}\n成交GMV：${formatMoney(row[key])}`}
+                      >
+                        {formatGmvCell(row[key])}
+                      </td>
+                    ))}
                     <td className="border-b border-line px-3 py-2 text-right tabular-nums font-semibold" style={{ background: heatColor(row.followGmv, maxValue) }}>{formatGmvCell(row.followGmv)}</td>
                     <td className="border-b border-line px-3 py-2 text-right tabular-nums font-semibold" style={{ background: heatColor(row.closedGmv, maxValue) }}>{formatGmvCell(row.closedGmv)}</td>
                   </>
                 ) : (
                   <>
-                    {(['d4Rate', 'd5Rate', 'd6Rate', 'd7Rate', 'd8Rate', 'd9Rate', 'd10Rate'] as const).map((key) => (
+                    {(['d4Rate', 'd5Rate', 'd6Rate', 'd7Rate'] as const).map((key) => (
                       <td
                         key={key}
                         className="border-b border-line px-3 py-2 text-right tabular-nums"
@@ -1751,6 +1811,16 @@ function ConversionTableCard({
                       </td>
                     ))}
                     <td className="border-b border-line px-3 py-2 text-right tabular-nums" style={{ background: rateHeatColor(row.currentRate) }}>{formatPercent(row.currentRate, 2)}</td>
+                    {(['d8Rate', 'd9Rate', 'd10Rate'] as const).map((key) => (
+                      <td
+                        key={key}
+                        className="border-b border-line px-3 py-2 text-right tabular-nums"
+                        style={{ background: rateHeatColor(row[key]) }}
+                        title={`${dimensionLabel}：${row.key}\n日期：${key.slice(0, 2).toUpperCase()}\n转化率：${formatPercent(row[key], 2)}\nleads数：${formatMoney(row.leads)}`}
+                      >
+                        {formatPercent(row[key], 2)}
+                      </td>
+                    ))}
                     <td className="border-b border-line px-3 py-2 text-right tabular-nums" style={{ background: rateHeatColor(row.followRate) }}>{formatPercent(row.followRate, 2)}</td>
                     <td className="border-b border-line px-3 py-2 text-right tabular-nums" style={{ background: rateHeatColor(row.closedRate) }}>{formatPercent(row.closedRate, 2)}</td>
                   </>
@@ -1760,7 +1830,7 @@ function ConversionTableCard({
             ))}
             {!rows.length ? (
               <tr>
-                <td colSpan={16} className="px-3 py-8 text-center text-sm text-slate-500">暂无可展示数据</td>
+                <td colSpan={13} className="px-3 py-8 text-center text-sm text-slate-500">暂无可展示数据</td>
               </tr>
             ) : null}
           </tbody>

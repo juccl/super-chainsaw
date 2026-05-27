@@ -80,10 +80,10 @@ export function GlobalFilters({ rows, filters, onChange }: GlobalFiltersProps) {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="text-sm text-slate-700">当前筛选：{summaryText}</div>
           <div className="flex items-center gap-2">
-            <button type="button" className="rounded-md border border-line px-3 py-1 text-xs text-slate-600 hover:bg-slate-50" onClick={clearAll}>
+            <button type="button" className="btn-secondary h-9 px-3 text-sm" onClick={clearAll}>
               清空筛选
             </button>
-            <button type="button" className="rounded-md border border-line px-3 py-1 text-xs text-slate-600 hover:bg-slate-50" onClick={() => setPanelCollapsed(false)}>
+            <button type="button" className="btn-secondary h-9 px-3 text-sm" onClick={() => setPanelCollapsed(false)}>
               展开筛选
             </button>
           </div>
@@ -99,14 +99,14 @@ export function GlobalFilters({ rows, filters, onChange }: GlobalFiltersProps) {
           <h2 className="section-title">筛选工具栏</h2>
           <p className="section-subtitle">支持搜索、多选、全选和折叠，筛选器按字段 AND 联动。</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button type="button" className="rounded-md border border-line px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50" onClick={selectAllFields}>
+        <div className="segmented">
+          <button type="button" className="segmented-btn" onClick={selectAllFields}>
             全选全部
           </button>
-          <button type="button" className="rounded-md border border-line px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50" onClick={clearAll}>
+          <button type="button" className="segmented-btn" onClick={clearAll}>
             清空筛选
           </button>
-          <button type="button" className="rounded-md border border-line px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50" onClick={() => setPanelCollapsed(true)}>
+          <button type="button" className="segmented-btn" onClick={() => setPanelCollapsed(true)}>
             收起筛选
           </button>
         </div>
@@ -171,11 +171,11 @@ export function GlobalFilters({ rows, filters, onChange }: GlobalFiltersProps) {
                     ) : null}
                   </label>
 
-                  <div className="mb-2 flex items-center gap-2">
-                    <button type="button" className="rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-sky-50" onClick={selectAllVisible}>
+                  <div className="mb-2 segmented">
+                    <button type="button" className="segmented-btn text-xs" onClick={selectAllVisible}>
                       全选
                     </button>
-                    <button type="button" className="rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-sky-50" onClick={() => setField(field.key, [])}>
+                    <button type="button" className="segmented-btn text-xs" onClick={() => setField(field.key, [])}>
                       清空
                     </button>
                   </div>

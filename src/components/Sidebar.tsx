@@ -1,32 +1,12 @@
-import { Calculator, ChevronDown, ChevronLeft, ChevronRight, Database, FolderPlus, Trash2, UploadCloud } from 'lucide-react';
-import { ChangeEvent, useEffect, useState } from 'react';
+import { Calculator, ChevronDown, ChevronLeft, ChevronRight, FolderPlus } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { PageKey } from './Layout';
 
 interface SidebarProps {
   page: PageKey;
-  overviewUpload?: {
-    fileName?: string;
-    uploadedAt?: string;
-    rawRows?: number;
-    cleanedRows?: number;
-    filteredRows?: number;
-  };
-  channelUpload?: {
-    fileName?: string;
-    uploadedAt?: string;
-    rawRows?: number;
-    cleanedRows?: number;
-    filteredRows?: number;
-  };
-  overviewFieldStatus: string;
-  channelFieldStatus: string;
   collapsed: boolean;
   onToggleCollapsed: () => void;
   onPageChange: (page: PageKey) => void;
-  onUploadOverview: (file: File) => void;
-  onUploadChannel: (file: File) => void;
-  onClearOverviewData: () => void;
-  onClearChannelData: () => void;
 }
 
 const CHANNEL_SUBMENU_KEY = 'business-dashboard:channel-submenu-open';
@@ -34,27 +14,14 @@ const PRIMARY_MENU_ORDER_KEY = 'business-dashboard:primary-menu-order';
 
 type IconKind = 'overview' | 'personal' | 'channel' | 'calculator';
 
-const items: Array<{ key: PageKey; label: string; icon: IconKind }> = [
-  { key: 'overview', label: '首页', icon: 'overview' },
-  { key: 'personal', label: '个人经营', icon: 'personal' },
-  { key: 'fee-calculator', label: '费比测算', icon: 'calculator' },
-];
 type PrimaryMenuKey = 'overview' | 'personal' | 'channel' | 'fee-calculator';
 const DEFAULT_PRIMARY_MENU_ORDER: PrimaryMenuKey[] = ['overview', 'personal', 'channel', 'fee-calculator'];
 
 export function Sidebar({
   page,
-  overviewUpload,
-  channelUpload,
-  overviewFieldStatus,
-  channelFieldStatus,
   collapsed,
   onToggleCollapsed,
   onPageChange,
-  onUploadOverview,
-  onUploadChannel,
-  onClearOverviewData,
-  onClearChannelData,
 }: SidebarProps) {
   const [primaryMenuOrder, setPrimaryMenuOrder] = useState<PrimaryMenuKey[]>(() => {
     if (typeof window === 'undefined') return DEFAULT_PRIMARY_MENU_ORDER;
@@ -92,19 +59,6 @@ export function Sidebar({
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(PRIMARY_MENU_ORDER_KEY, JSON.stringify(primaryMenuOrder));
   }, [primaryMenuOrder]);
-
-  const onOverviewFile = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    onUploadOverview(file);
-    event.target.value = '';
-  };
-  const onChannelFile = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    onUploadChannel(file);
-    event.target.value = '';
-  };
 
   const onMenuDrop = (targetKey: PrimaryMenuKey) => {
     if (!draggingMenuKey || draggingMenuKey === targetKey) return;
@@ -255,66 +209,8 @@ export function Sidebar({
           })}
         </nav>
 
-        <div className="mt-4 rounded-2xl border border-[#dce7f5] bg-white p-3 shadow-card">
-          <label
-            className={`flex cursor-pointer items-center rounded-xl border border-dashed border-primary bg-primarySoft px-3 py-2 text-sm text-[#2459af] hover:bg-blue-100 ${collapsed ? 'justify-center' : 'gap-2'}`}
-            title={collapsed ? '上传业务数据表' : ''}
-          >
-            <UploadCloud size={16} />
-            {collapsed ? null : '上传业务数据表'}
-            <input className="hidden" type="file" accept=".xlsx,.xls,.csv" onChange={onOverviewFile} />
-          </label>
-          {collapsed ? null : (
-            <div className="mt-3 space-y-1 text-xs text-slate-600">
-              <div>文件名：{overviewUpload?.fileName || '-'}</div>
-              <div>上传时间：{overviewUpload?.uploadedAt ? new Date(overviewUpload.uploadedAt).toLocaleString('zh-CN') : '-'}</div>
-              <div>原始行数：{overviewUpload?.rawRows ? overviewUpload.rawRows.toLocaleString('zh-CN') : '-'}</div>
-              <div>有效行数：{overviewUpload?.cleanedRows ? overviewUpload.cleanedRows.toLocaleString('zh-CN') : '-'}</div>
-              <div>过滤行数：{overviewUpload?.filteredRows ? overviewUpload.filteredRows.toLocaleString('zh-CN') : '-'}</div>
-              <div>字段识别：{overviewFieldStatus}</div>
-              <button type="button" onClick={onClearOverviewData} className="mt-2 inline-flex items-center gap-1 rounded border border-line bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50">
-                <Trash2 size={12} />
-                清空数据
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="mt-3 rounded-2xl border border-[#dce7f5] bg-white p-3 shadow-card">
-          <label
-            className={`flex cursor-pointer items-center rounded-xl border border-dashed border-primary bg-primarySoft px-3 py-2 text-sm text-[#2459af] hover:bg-blue-100 ${collapsed ? 'justify-center' : 'gap-2'}`}
-            title={collapsed ? '上传渠道明细数据表' : ''}
-          >
-            <UploadCloud size={16} />
-            {collapsed ? null : '上传渠道明细数据表'}
-            <input className="hidden" type="file" accept=".xlsx,.xls,.csv" onChange={onChannelFile} />
-          </label>
-          {collapsed ? null : (
-            <div className="mt-3 space-y-1 text-xs text-slate-600">
-              <div>文件名：{channelUpload?.fileName || '-'}</div>
-              <div>上传时间：{channelUpload?.uploadedAt ? new Date(channelUpload.uploadedAt).toLocaleString('zh-CN') : '-'}</div>
-              <div>原始行数：{channelUpload?.rawRows ? channelUpload.rawRows.toLocaleString('zh-CN') : '-'}</div>
-              <div>有效行数：{channelUpload?.cleanedRows ? channelUpload.cleanedRows.toLocaleString('zh-CN') : '-'}</div>
-              <div>过滤行数：{channelUpload?.filteredRows ? channelUpload.filteredRows.toLocaleString('zh-CN') : '-'}</div>
-              <div>字段识别：{channelFieldStatus}</div>
-              <button type="button" onClick={onClearChannelData} className="mt-2 inline-flex items-center gap-1 rounded border border-line bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50">
-                <Trash2 size={12} />
-                清空渠道明细数据
-              </button>
-            </div>
-          )}
-        </div>
-
         <div className="mt-auto border-t border-[#dce7f5] pt-3 text-xs text-slate-500">
-          <div className={collapsed ? 'text-center' : ''} title={collapsed ? `业务识别：${overviewFieldStatus}｜渠道识别：${channelFieldStatus}` : ''}>
-            {collapsed ? <Database size={14} className="mx-auto" /> : '字段识别状态'}
-          </div>
-          {!collapsed && (
-            <>
-              <div className="mt-1">业务识别：{overviewFieldStatus}</div>
-              <div className="mt-1">渠道识别：{channelFieldStatus}</div>
-            </>
-          )}
+          <div className={collapsed ? 'text-center' : ''}>分析优先，数据源请在顶部管理</div>
         </div>
       </div>
     </aside>
