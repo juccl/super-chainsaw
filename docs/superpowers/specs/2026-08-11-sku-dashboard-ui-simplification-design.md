@@ -121,6 +121,7 @@ The campaign conversion trend module shows:
 - keep the existing unified blue heatmap color scale for the table rather than mixing unrelated accent colors.
 - keep the table controls for sorting, GMV/conversion view mode, and channel top-N where applicable.
 - keep sorting controls in their existing position and preserve sorting options such as `leads数↓`, `当期转化率`, `追单转化率`, and `封板转化率`.
+- keep the operation control styling exactly: `导出 CSV` button followed by the `GMV低` label, the blue gradient legend bar, and the `GMV高` label.
 - remove temporary detail mock modules such as `渠道号 Top 变化` and `D4-D10 转化节奏`.
 
 Formula and aggregation code stays unchanged.
