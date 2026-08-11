@@ -43,6 +43,17 @@ Use the user's reference UI as the visual direction:
 
 Avoid showing explanatory feature copy inside the product. Labels should name data and actions, not teach the UI.
 
+## Drag Ordering
+
+Workspace components support drag ordering wherever the user naturally expects to rearrange the view:
+
+- overview metric cards can be reordered.
+- overview modules such as GMV target progress and campaign conversion trend can be reordered.
+- detail-page table/chart modules can be reordered.
+- fee-calculator scenario cards can keep their existing editable behavior and should support ordering if the restyled UI represents them as cards.
+
+Persist component order in local storage. Drag handles should be visually subtle and should not dominate the reference UI style. Do not add drag behavior to atomic controls such as individual filter dropdowns, icon buttons, or form fields.
+
 ## Sidebar
 
 The sidebar uses horizontal collapse, matching the existing app behavior:
