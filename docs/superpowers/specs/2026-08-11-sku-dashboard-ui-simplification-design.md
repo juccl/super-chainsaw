@@ -111,12 +111,15 @@ The campaign conversion trend module shows:
 
 ## Detail
 
-`明细` should preserve the existing `板块二：个人 / 渠道拆解` behavior and layout from the channel detail page because this is the user's most common workflow. Enter it through the simplified navigation, but keep the core structure:
+`明细` should preserve the existing `板块二：个人 / 渠道拆解` behavior and layout from the channel detail page because this is the user's most common workflow. Enter it through the simplified navigation, but keep the function positions and UI arrangement identical to the current block-two design:
 
 - top filters use the same four fields: `营期`, `渠道归属人`, `渠道号`, `分类`.
+- rename the section title to `个人 / 渠道拆解`; do not show `板块二：`.
 - detail content keeps the two-tab switch: `渠道归属人` and `渠道号明细`.
 - keep the D4-D10 GMV/conversion heatmap-style table.
+- keep the existing unified blue heatmap color scale for the table rather than mixing unrelated accent colors.
 - keep the table controls for sorting, GMV/conversion view mode, and channel top-N where applicable.
+- keep sorting controls in their existing position and preserve sorting options such as `leads数↓`, `当期转化率`, `追单转化率`, and `封板转化率`.
 - remove temporary detail mock modules such as `渠道号 Top 变化` and `D4-D10 转化节奏`.
 
 Formula and aggregation code stays unchanged.
