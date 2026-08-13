@@ -53,7 +53,7 @@ export function DailyInspiration() {
 
   if (collapsed) {
     return (
-      <section className="panel mb-4 bg-gradient-to-r from-[#eef5ff] via-white to-[#effdf8] px-4 py-2">
+      <section className="panel mb-4 sku-inspiration bg-gradient-to-r from-[#eef5ff] via-white to-[#effdf8] px-4 py-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm text-slate-700">
             <Sparkles size={15} className="text-primary" />
@@ -69,7 +69,7 @@ export function DailyInspiration() {
   }
 
   return (
-    <section className="panel mb-4 bg-gradient-to-r from-[#eef5ff] via-white to-[#effdf8] px-4 py-3">
+    <section className="panel mb-4 sku-inspiration bg-gradient-to-r from-[#eef5ff] via-white to-[#effdf8] px-4 py-3">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-lg border border-blue-100 bg-white text-primary">

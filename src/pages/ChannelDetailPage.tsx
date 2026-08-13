@@ -15,7 +15,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { Settings2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { Dispatch, PointerEvent as ReactPointerEvent, ReactNode, SetStateAction } from 'react';
 import {
   Cell,
   CartesianGrid,
@@ -63,6 +63,7 @@ const STORAGE = {
   structureScope: 'channelDetail_structure_scope',
   structurePanelVisible: 'channelDetail_structurePanelVisible',
   breakdownActiveTab: 'channelDetail_breakdownActiveTab',
+  tableColumnWidths: 'channelDetail_tableColumnWidths',
 };
 
 type DimensionKey = 'owner' | 'channelId' | 'category';
@@ -117,6 +118,38 @@ type TableSortField =
   | 'followGmv'
   | 'closedGmv'
   | 'followRatio';
+const TABLE_COLUMN_IDS = [
+  'dimension',
+  'leads',
+  'd4',
+  'd5',
+  'd6',
+  'd7',
+  'current',
+  'd8',
+  'd9',
+  'd10',
+  'follow',
+  'closed',
+  'followRatio',
+] as const;
+type TableColumnId = (typeof TABLE_COLUMN_IDS)[number];
+type TableColumnWidths = Record<TableColumnId, number>;
+const DEFAULT_TABLE_COLUMN_WIDTHS: TableColumnWidths = {
+  dimension: 148,
+  leads: 116,
+  d4: 112,
+  d5: 112,
+  d6: 112,
+  d7: 112,
+  current: 140,
+  d8: 112,
+  d9: 112,
+  d10: 112,
+  follow: 128,
+  closed: 144,
+  followRatio: 116,
+};
 type TableSortState = {
   field: TableSortField;
   direction: 'desc' | 'asc';
@@ -312,6 +345,9 @@ export function ChannelDetailPage({ rows, upload, viewMode = 'all' }: ChannelDet
     normalizeFieldCollapsed(readStorage(STORAGE.filterFieldCollapsed, DEFAULT_FIELD_COLLAPSED)),
   );
   const [queries, setQueries] = useState<Partial<Record<keyof ChannelDetailFilters, string>>>({});
+  const [tableColumnWidths, setTableColumnWidths] = useState<TableColumnWidths>(() =>
+    normalizeTableColumnWidths(readStorage(STORAGE.tableColumnWidths, DEFAULT_TABLE_COLUMN_WIDTHS)),
+  );
 
   useEffect(() => writeStorage(STORAGE.filters, filters), [filters]);
   useEffect(() => writeStorage(STORAGE.chartConfig, chartConfig), [chartConfig]);
@@ -329,6 +365,7 @@ export function ChannelDetailPage({ rows, upload, viewMode = 'all' }: ChannelDet
   useEffect(() => writeStorage(STORAGE.structureScope, structureScope), [structureScope]);
   useEffect(() => writeStorage(STORAGE.structurePanelVisible, structurePanelVisible), [structurePanelVisible]);
   useEffect(() => writeStorage(STORAGE.breakdownActiveTab, breakdownActiveTab), [breakdownActiveTab]);
+  useEffect(() => writeStorage(STORAGE.tableColumnWidths, tableColumnWidths), [tableColumnWidths]);
 
   const options = useMemo(() => channelDetailFilterOptions(rows), [rows]);
   const filteredRows = useMemo(() => applyChannelDetailFilters(rows, filters), [rows, filters]);
@@ -457,11 +494,6 @@ export function ChannelDetailPage({ rows, upload, viewMode = 'all' }: ChannelDet
   };
   return (
     <div className="space-y-4">
-      {upload ? (
-        <section className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs text-slate-600 shadow-sm">
-          当前渠道明细数据：{upload.fileName || '-'} ｜ 清洗后 {upload.cleanedRows?.toLocaleString('zh-CN') || 0} 行 ｜ 已缓存
-        </section>
-      ) : null}
       {rows.length === 0 ? (
         <section className="panel bg-white p-8 text-center">
           <div className="text-base font-medium text-slate-700">请先上传渠道经营明细数据表</div>
@@ -713,7 +745,7 @@ export function ChannelDetailPage({ rows, upload, viewMode = 'all' }: ChannelDet
 
           {viewMode === 'block1' ? null : (
           <section className="space-y-4">
-            <h3 className="text-base font-semibold text-ink">板块二：个人 / 渠道拆解</h3>
+            <h3 className="text-base font-semibold text-ink">个人 / 渠道拆解</h3>
             <p className="text-sm text-slate-500">按渠道归属人和渠道号拆解 D4～D10 成交 GMV、单日转化率与封板转化表现。</p>
             <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
               <button
@@ -743,6 +775,8 @@ export function ChannelDetailPage({ rows, upload, viewMode = 'all' }: ChannelDet
                 onViewModeChange={setOwnerTableViewMode}
                 sortState={ownerTableSort}
                 onSortStateChange={setOwnerTableSort}
+                columnWidths={tableColumnWidths}
+                onColumnWidthsChange={setTableColumnWidths}
               />
             ) : (
               <ConversionTableCard
@@ -757,6 +791,8 @@ export function ChannelDetailPage({ rows, upload, viewMode = 'all' }: ChannelDet
                 onSortStateChange={setChannelTableSort}
                 topN={channelTopN}
                 onTopNChange={setChannelTopN}
+                columnWidths={tableColumnWidths}
+                onColumnWidthsChange={setTableColumnWidths}
               />
             )}
           </section>
@@ -959,7 +995,7 @@ function ChannelDetailFilterPanel({
           </div>
         </div>
       ) : null}
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-3 lg:grid-cols-4">
         {fields.map((field) => (
           <ChannelFilterCard
             key={field.key}
@@ -1258,6 +1294,20 @@ function normalizeGmvHeatmapSort(input: unknown): GmvHeatmapSortKey {
 function normalizeTopN(input: unknown): ChannelTopN {
   if (input === 10 || input === 20 || input === 50 || input === 'all') return input;
   return 10;
+}
+
+function normalizeColumnWidth(input: unknown): number {
+  const value = typeof input === 'number' ? input : Number(input);
+  if (!Number.isFinite(value)) return 128;
+  return Math.min(320, Math.max(84, Math.round(value / 4) * 4));
+}
+
+function normalizeTableColumnWidths(input: unknown): TableColumnWidths {
+  const raw = input && typeof input === 'object' ? (input as Partial<Record<TableColumnId, unknown>>) : {};
+  return TABLE_COLUMN_IDS.reduce((acc, key) => {
+    acc[key] = normalizeColumnWidth(raw[key] ?? DEFAULT_TABLE_COLUMN_WIDTHS[key]);
+    return acc;
+  }, {} as TableColumnWidths);
 }
 
 function normalizeTableViewMode(input: unknown): TableViewMode {
@@ -1581,6 +1631,8 @@ function ConversionTableCard({
   onSortStateChange,
   topN,
   onTopNChange,
+  columnWidths,
+  onColumnWidthsChange,
 }: {
   title: string;
   subtitle: string;
@@ -1593,7 +1645,44 @@ function ConversionTableCard({
   onSortStateChange: (state: TableSortState) => void;
   topN?: ChannelTopN;
   onTopNChange?: (value: ChannelTopN) => void;
+  columnWidths: TableColumnWidths;
+  onColumnWidthsChange: Dispatch<SetStateAction<TableColumnWidths>>;
 }) {
+  const columnStyle = (key: TableColumnId) => ({
+    width: columnWidths[key],
+    minWidth: columnWidths[key],
+    maxWidth: columnWidths[key],
+  });
+  const groupStyle = (keys: TableColumnId[]) => {
+    const width = keys.reduce((sum, key) => sum + columnWidths[key], 0);
+    return { width, minWidth: width, maxWidth: width };
+  };
+  const tableMinWidth = TABLE_COLUMN_IDS.reduce((sum, key) => sum + columnWidths[key], 0);
+  const startColumnResize = (key: TableColumnId, event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth = columnWidths[key];
+    const onMove = (moveEvent: PointerEvent) => {
+      const nextWidth = normalizeColumnWidth(startWidth + moveEvent.clientX - startX);
+      onColumnWidthsChange((prev) => ({ ...prev, [key]: nextWidth }));
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp, { once: true });
+  };
+  const resizeHandle = (key: TableColumnId, label: string) => (
+    <button
+      type="button"
+      className="table-col-resizer"
+      aria-label={`调整${label}列宽`}
+      onPointerDown={(event) => startColumnResize(key, event)}
+    />
+  );
   const onSortFieldChange = (field: TableSortField) => {
     onSortStateChange({
       field,
@@ -1720,83 +1809,114 @@ function ConversionTableCard({
         </div>
       </div>
       <div className="max-h-[540px] overflow-auto">
-        <table className="min-w-[1600px] border-separate border-spacing-0 text-sm">
+        <table className="border-separate border-spacing-0 text-sm" style={{ minWidth: tableMinWidth, tableLayout: 'fixed' }}>
           <thead className="sticky top-0 z-10 bg-[#f1f5fb] text-xs text-slate-600">
             <tr>
-              <th className="sticky left-0 z-30 border-b border-line bg-[#e9eff9] px-3 py-2 text-left font-semibold" colSpan={2}>基础信息</th>
-              <th className="border-b border-line bg-[#e9eff9] px-3 py-2 text-center font-semibold" colSpan={5}>当期转化 D4～D7</th>
-              <th className="border-b border-line bg-[#e9eff9] px-3 py-2 text-center font-semibold" colSpan={4}>追单转化 D8～D10</th>
-              <th className="border-b border-line bg-[#e9eff9] px-3 py-2 text-center font-semibold" colSpan={2}>封板结果</th>
+              <th className="sticky left-0 z-30 border-b border-line bg-[#e9eff9] px-3 py-2 text-left font-semibold" style={groupStyle(['dimension', 'leads'])} colSpan={2}>基础信息</th>
+              <th className="border-b border-line bg-[#e9eff9] px-3 py-2 text-center font-semibold" style={groupStyle(['d4', 'd5', 'd6', 'd7', 'current'])} colSpan={5}>当期转化 D4～D7</th>
+              <th className="border-b border-line bg-[#e9eff9] px-3 py-2 text-center font-semibold" style={groupStyle(['d8', 'd9', 'd10', 'follow'])} colSpan={4}>追单转化 D8～D10</th>
+              <th className="border-b border-line bg-[#e9eff9] px-3 py-2 text-center font-semibold" style={groupStyle(['closed', 'followRatio'])} colSpan={2}>封板结果</th>
             </tr>
             <tr>
-              <th className="sticky left-0 z-20 border-b border-line bg-[#f1f5fb] px-3 py-2 text-left font-semibold">{dimensionLabel}</th>
-              <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange('leads')}>leads数</th>
+              <th className="sticky left-0 z-20 border-b border-line bg-[#f1f5fb] px-3 py-2 text-left font-semibold table-resizable-th" style={columnStyle('dimension')}>
+                {dimensionLabel}
+                {resizeHandle('dimension', dimensionLabel)}
+              </th>
+              <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold table-resizable-th" style={columnStyle('leads')} onClick={() => onSortFieldChange('leads')}>
+                leads数
+                {resizeHandle('leads', 'leads数')}
+              </th>
               {viewMode === 'gmv' ? (
                 <>
                   {([4, 5, 6, 7] as const).map((day) => (
-                    <th key={`gmv-${day}`} className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange(`d${day}gmv` as TableSortField)}>
+                    <th key={`gmv-${day}`} className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold table-resizable-th" style={columnStyle(`d${day}` as TableColumnId)} onClick={() => onSortFieldChange(`d${day}gmv` as TableSortField)}>
                       {`D${day} GMV`}
+                      {resizeHandle(`d${day}` as TableColumnId, `D${day} GMV`)}
                     </th>
                   ))}
-                  <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange('currentGmv')}>当期成交GMV</th>
+                  <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold table-resizable-th" style={columnStyle('current')} onClick={() => onSortFieldChange('currentGmv')}>
+                    当期成交GMV
+                    {resizeHandle('current', '当期成交GMV')}
+                  </th>
                   {([8, 9, 10] as const).map((day) => (
-                    <th key={`gmv-${day}`} className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange(`d${day}gmv` as TableSortField)}>
+                    <th key={`gmv-${day}`} className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold table-resizable-th" style={columnStyle(`d${day}` as TableColumnId)} onClick={() => onSortFieldChange(`d${day}gmv` as TableSortField)}>
                       {`D${day} GMV`}
+                      {resizeHandle(`d${day}` as TableColumnId, `D${day} GMV`)}
                     </th>
                   ))}
-                  <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange('followGmv')}>追单GMV</th>
-                  <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange('closedGmv')}>封板成交GMV</th>
+                  <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold table-resizable-th" style={columnStyle('follow')} onClick={() => onSortFieldChange('followGmv')}>
+                    追单GMV
+                    {resizeHandle('follow', '追单GMV')}
+                  </th>
+                  <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold table-resizable-th" style={columnStyle('closed')} onClick={() => onSortFieldChange('closedGmv')}>
+                    封板成交GMV
+                    {resizeHandle('closed', '封板成交GMV')}
+                  </th>
                 </>
               ) : (
                 <>
                   {([4, 5, 6, 7] as const).map((day) => (
-                    <th key={`rate-${day}`} className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange(`d${day}Rate` as TableSortField)}>
+                    <th key={`rate-${day}`} className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold table-resizable-th" style={columnStyle(`d${day}` as TableColumnId)} onClick={() => onSortFieldChange(`d${day}Rate` as TableSortField)}>
                       {`D${day} 转化率`}
+                      {resizeHandle(`d${day}` as TableColumnId, `D${day} 转化率`)}
                     </th>
                   ))}
-                  <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange('currentRate')}>当期转化率</th>
+                  <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold table-resizable-th" style={columnStyle('current')} onClick={() => onSortFieldChange('currentRate')}>
+                    当期转化率
+                    {resizeHandle('current', '当期转化率')}
+                  </th>
                   {([8, 9, 10] as const).map((day) => (
-                    <th key={`rate-${day}`} className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange(`d${day}Rate` as TableSortField)}>
+                    <th key={`rate-${day}`} className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold table-resizable-th" style={columnStyle(`d${day}` as TableColumnId)} onClick={() => onSortFieldChange(`d${day}Rate` as TableSortField)}>
                       {`D${day} 转化率`}
+                      {resizeHandle(`d${day}` as TableColumnId, `D${day} 转化率`)}
                     </th>
                   ))}
-                  <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange('followRate')}>追单转化率</th>
-                  <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange('closedRate')}>封板转化率</th>
+                  <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold table-resizable-th" style={columnStyle('follow')} onClick={() => onSortFieldChange('followRate')}>
+                    追单转化率
+                    {resizeHandle('follow', '追单转化率')}
+                  </th>
+                  <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold table-resizable-th" style={columnStyle('closed')} onClick={() => onSortFieldChange('closedRate')}>
+                    封板转化率
+                    {resizeHandle('closed', '封板转化率')}
+                  </th>
                 </>
               )}
-              <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold" onClick={() => onSortFieldChange('followRatio')}>追单占比</th>
+              <th className="cursor-pointer border-b border-line px-3 py-2 text-right font-semibold table-resizable-th" style={columnStyle('followRatio')} onClick={() => onSortFieldChange('followRatio')}>
+                追单占比
+                {resizeHandle('followRatio', '追单占比')}
+              </th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.key} className="hover:bg-slate-50/70">
-                <td className="sticky left-0 z-[1] border-b border-line bg-white px-3 py-2 text-sm font-medium text-slate-700">{row.key}</td>
-                <td className="border-b border-line px-3 py-2 text-right tabular-nums">{formatMoney(row.leads)}</td>
+                <td className="sticky left-0 z-[1] overflow-hidden text-ellipsis whitespace-nowrap border-b border-line bg-white px-3 py-2 text-sm font-medium text-slate-700" style={columnStyle('dimension')} title={row.key}>{row.key}</td>
+                <td className="border-b border-line px-3 py-2 text-right tabular-nums" style={columnStyle('leads')}>{formatMoney(row.leads)}</td>
                 {viewMode === 'gmv' ? (
                   <>
                     {(['d4gmv', 'd5gmv', 'd6gmv', 'd7gmv'] as const).map((key) => (
                       <td
                         key={key}
                         className="border-b border-line px-3 py-2 text-right tabular-nums"
-                        style={{ background: heatColor(row[key], maxValue) }}
+                        style={{ ...columnStyle(key.slice(0, 2) as TableColumnId), background: heatColor(row[key], maxValue) }}
                         title={`${dimensionLabel}：${row.key}\n日期：${key.toUpperCase().replace('GMV', '')}\n成交GMV：${formatMoney(row[key])}`}
                       >
                         {formatGmvCell(row[key])}
                       </td>
                     ))}
-                    <td className="border-b border-line px-3 py-2 text-right tabular-nums font-semibold" style={{ background: heatColor(row.currentGmv, maxValue) }}>{formatGmvCell(row.currentGmv)}</td>
+                    <td className="border-b border-line px-3 py-2 text-right tabular-nums font-semibold" style={{ ...columnStyle('current'), background: heatColor(row.currentGmv, maxValue) }}>{formatGmvCell(row.currentGmv)}</td>
                     {(['d8gmv', 'd9gmv', 'd10gmv'] as const).map((key) => (
                       <td
                         key={key}
                         className="border-b border-line px-3 py-2 text-right tabular-nums"
-                        style={{ background: heatColor(row[key], maxValue) }}
+                        style={{ ...columnStyle(key.slice(0, key.startsWith('d10') ? 3 : 2) as TableColumnId), background: heatColor(row[key], maxValue) }}
                         title={`${dimensionLabel}：${row.key}\n日期：${key.toUpperCase().replace('GMV', '')}\n成交GMV：${formatMoney(row[key])}`}
                       >
                         {formatGmvCell(row[key])}
                       </td>
                     ))}
-                    <td className="border-b border-line px-3 py-2 text-right tabular-nums font-semibold" style={{ background: heatColor(row.followGmv, maxValue) }}>{formatGmvCell(row.followGmv)}</td>
-                    <td className="border-b border-line px-3 py-2 text-right tabular-nums font-semibold" style={{ background: heatColor(row.closedGmv, maxValue) }}>{formatGmvCell(row.closedGmv)}</td>
+                    <td className="border-b border-line px-3 py-2 text-right tabular-nums font-semibold" style={{ ...columnStyle('follow'), background: heatColor(row.followGmv, maxValue) }}>{formatGmvCell(row.followGmv)}</td>
+                    <td className="border-b border-line px-3 py-2 text-right tabular-nums font-semibold" style={{ ...columnStyle('closed'), background: heatColor(row.closedGmv, maxValue) }}>{formatGmvCell(row.closedGmv)}</td>
                   </>
                 ) : (
                   <>
@@ -1804,28 +1924,28 @@ function ConversionTableCard({
                       <td
                         key={key}
                         className="border-b border-line px-3 py-2 text-right tabular-nums"
-                        style={{ background: rateHeatColor(row[key]) }}
+                        style={{ ...columnStyle(key.slice(0, 2) as TableColumnId), background: rateHeatColor(row[key]) }}
                         title={`${dimensionLabel}：${row.key}\n日期：${key.slice(0, 2).toUpperCase()}\n转化率：${formatPercent(row[key], 2)}\nleads数：${formatMoney(row.leads)}`}
                       >
                         {formatPercent(row[key], 2)}
                       </td>
                     ))}
-                    <td className="border-b border-line px-3 py-2 text-right tabular-nums" style={{ background: rateHeatColor(row.currentRate) }}>{formatPercent(row.currentRate, 2)}</td>
+                    <td className="border-b border-line px-3 py-2 text-right tabular-nums" style={{ ...columnStyle('current'), background: rateHeatColor(row.currentRate) }}>{formatPercent(row.currentRate, 2)}</td>
                     {(['d8Rate', 'd9Rate', 'd10Rate'] as const).map((key) => (
                       <td
                         key={key}
                         className="border-b border-line px-3 py-2 text-right tabular-nums"
-                        style={{ background: rateHeatColor(row[key]) }}
+                        style={{ ...columnStyle(key.slice(0, key.startsWith('d10') ? 3 : 2) as TableColumnId), background: rateHeatColor(row[key]) }}
                         title={`${dimensionLabel}：${row.key}\n日期：${key.slice(0, 2).toUpperCase()}\n转化率：${formatPercent(row[key], 2)}\nleads数：${formatMoney(row.leads)}`}
                       >
                         {formatPercent(row[key], 2)}
                       </td>
                     ))}
-                    <td className="border-b border-line px-3 py-2 text-right tabular-nums" style={{ background: rateHeatColor(row.followRate) }}>{formatPercent(row.followRate, 2)}</td>
-                    <td className="border-b border-line px-3 py-2 text-right tabular-nums" style={{ background: rateHeatColor(row.closedRate) }}>{formatPercent(row.closedRate, 2)}</td>
+                    <td className="border-b border-line px-3 py-2 text-right tabular-nums" style={{ ...columnStyle('follow'), background: rateHeatColor(row.followRate) }}>{formatPercent(row.followRate, 2)}</td>
+                    <td className="border-b border-line px-3 py-2 text-right tabular-nums" style={{ ...columnStyle('closed'), background: rateHeatColor(row.closedRate) }}>{formatPercent(row.closedRate, 2)}</td>
                   </>
                 )}
-                <td className="border-b border-line px-3 py-2 text-right tabular-nums">{formatPercent(row.followRatio, 2)}</td>
+                <td className="border-b border-line px-3 py-2 text-right tabular-nums" style={columnStyle('followRatio')}>{formatPercent(row.followRatio, 2)}</td>
               </tr>
             ))}
             {!rows.length ? (
