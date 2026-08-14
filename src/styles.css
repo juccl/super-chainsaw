@@ -2996,6 +2996,25 @@ body {
   background: rgba(245, 248, 252, 0.9);
 }
 
+.sku-top-sortable-filters {
+  min-width: 0;
+}
+
+.sku-top-sortable-filters .sku-section-drag-handle {
+  top: 7px;
+  right: 8px;
+  z-index: 14;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.sku-top-sortable-filters .sku-section-drag-handle:hover,
+.sku-top-sortable-filters .sku-section-drag-handle:focus-visible {
+  background: rgba(255, 255, 255, 0.94);
+}
+
 .sku-period-summary {
   position: relative;
   display: flex;
@@ -3225,55 +3244,60 @@ body {
 
 /* SKU metric cards: low-saturation color pass. */
 .sku-metric {
-  border-color: rgba(124, 139, 158, 0.12) !important;
+  border-color: rgba(180, 197, 214, 0.38) !important;
+  background: #f7f9fc !important;
   box-shadow: none;
 }
 
 .sku-metric::before {
-  opacity: 0.86;
-  width: 4px;
+  opacity: 0.62;
+  width: 3px;
 }
 
 .sku-metric.metric-blue {
-  --metric-accent: #6f9fce;
-  background: #f1f6fc !important;
+  --metric-accent: #9bbce0;
+  background: #f4f8fd !important;
 }
 
 .sku-metric.metric-sky,
 .sku-metric.hot.metric-sky {
-  --metric-accent: #7da4ca;
-  background: #edf4fb !important;
+  --metric-accent: #a8c7e3;
+  background: #f3f8fc !important;
 }
 
 .sku-metric.metric-green {
-  --metric-accent: #7cb69b;
-  background: #eff8f4 !important;
+  --metric-accent: #a8d6bf;
+  background: #f3fbf7 !important;
 }
 
 .sku-metric.metric-rose {
-  --metric-accent: #c09a94;
-  background: #f9f2f1 !important;
+  --metric-accent: #d9b9b5;
+  background: #fbf5f4 !important;
 }
 
 .sku-metric.metric-amber {
-  --metric-accent: #d6ba77;
-  background: #fbf7ec !important;
+  --metric-accent: #dfc98b;
+  background: #fdf9ef !important;
 }
 
 .sku-metric.metric-violet {
-  --metric-accent: #a99bd0;
-  background: #f5f2fb !important;
+  --metric-accent: #c1b6df;
+  background: #f8f5fd !important;
 }
 
 .sku-metric.metric-orange {
-  --metric-accent: #d7a283;
-  background: #fbf3ee !important;
+  --metric-accent: #dfbba5;
+  background: #fcf5f1 !important;
+}
+
+.sku-metric span {
+  color: #5f6f83 !important;
 }
 
 .sku-metric.hot span,
 .sku-metric.hot strong,
 .sku-metric strong {
-  color: #151a22 !important;
+  color: #18202b !important;
 }
 
 /* Steep-style progress card pass. */
@@ -3334,26 +3358,31 @@ body {
 }
 
 .sku-target-current {
-  grid-column: 1;
+  grid-column: 1 / -1;
   grid-row: 3;
   align-self: end;
-  display: inline-flex;
+  display: flex;
+  flex-direction: row !important;
   align-items: baseline;
   gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
   color: #9a4f3f;
 }
 
 .sku-target-current strong {
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1;
   font-weight: 880;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .sku-target-current span {
   font-size: 13px;
   font-weight: 820;
   color: rgba(154, 79, 63, 0.72);
+  white-space: nowrap;
 }
 
 .table-resizable-th {

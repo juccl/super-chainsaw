@@ -93,7 +93,7 @@ export default function App() {
       setChannelUpload(normalized.upload);
       setChannelRows(normalized.rows);
       setChannelRawRows(raw);
-      setMessage(`已上传 ${normalized.upload.fileName}，清洗后 ${normalized.upload.cleanedRows} 行参与计算。`);
+      setMessage('');
       setPage('overview');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '文件解析失败');

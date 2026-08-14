@@ -48,7 +48,7 @@ interface SkuOverviewPageProps {
 }
 
 type MetricKey = 'leads' | 'closedGmv' | 'closedRate' | 'closedCostRate' | 'cost' | 'closedRValue' | 'leadCost';
-type TopSectionKey = 'periodSummary' | 'metrics';
+type TopSectionKey = 'filters' | 'periodSummary' | 'metrics';
 type ModuleKey = 'progress' | 'trend';
 type FilterField = 'campaign' | 'owner' | 'channelId' | 'category';
 type TrendProductType = 'all' | 'free' | 'book';
@@ -59,7 +59,7 @@ const TOP_SECTION_ORDER_KEY = 'business-dashboard:sku-overview-top-section-order
 const METRIC_ORDER_KEY = 'business-dashboard:sku-overview-metric-order';
 const MODULE_ORDER_KEY = 'business-dashboard:sku-overview-module-order';
 const FILTER_ORDER_KEY = 'business-dashboard:sku-overview-filter-order';
-const DEFAULT_TOP_SECTION_ORDER: TopSectionKey[] = ['periodSummary', 'metrics'];
+const DEFAULT_TOP_SECTION_ORDER: TopSectionKey[] = ['filters', 'periodSummary', 'metrics'];
 const DEFAULT_METRIC_ORDER: MetricKey[] = ['leads', 'closedGmv', 'closedRate', 'closedCostRate', 'cost', 'closedRValue', 'leadCost'];
 const DEFAULT_MODULE_ORDER: ModuleKey[] = ['progress', 'trend'];
 const DEFAULT_FILTER_ORDER: FilterField[] = ['campaign', 'owner', 'channelId', 'category'];
@@ -94,6 +94,11 @@ function normalizeOrder<T extends string>(input: unknown, fallback: T[]): T[] {
   return merged;
 }
 
+function normalizeTopSectionOrder(input: unknown): TopSectionKey[] {
+  const order = normalizeOrder(input, DEFAULT_TOP_SECTION_ORDER);
+  return ['filters', ...order.filter((key) => key !== 'filters')];
+}
+
 export function SkuOverviewPage({ rows, upload, visibleMetrics = ['leads', 'closedGmv', 'cost', 'closedRValue', 'leadCost'] }: SkuOverviewPageProps) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const [filters, setFilters] = useState<ChannelDetailFilters>(() => normalizeFilters(readStorage(FILTERS_KEY, emptyChannelDetailFilters())));
@@ -108,7 +113,7 @@ export function SkuOverviewPage({ rows, upload, visibleMetrics = ['leads', 'clos
     const cached = readStorage<number>(TARGET_KEY, 1650000);
     return Number.isFinite(cached) && cached > 0 ? cached : 1650000;
   });
-  const [topSectionOrder, setTopSectionOrder] = useState<TopSectionKey[]>(() => normalizeOrder(readStorage(TOP_SECTION_ORDER_KEY, DEFAULT_TOP_SECTION_ORDER), DEFAULT_TOP_SECTION_ORDER));
+  const [topSectionOrder, setTopSectionOrder] = useState<TopSectionKey[]>(() => normalizeTopSectionOrder(readStorage(TOP_SECTION_ORDER_KEY, DEFAULT_TOP_SECTION_ORDER)));
   const [metricOrder, setMetricOrder] = useState<MetricKey[]>(() => normalizeOrder(readStorage(METRIC_ORDER_KEY, DEFAULT_METRIC_ORDER), DEFAULT_METRIC_ORDER));
   const [moduleOrder, setModuleOrder] = useState<ModuleKey[]>(() => normalizeOrder(readStorage(MODULE_ORDER_KEY, DEFAULT_MODULE_ORDER), DEFAULT_MODULE_ORDER));
   const [filterOrder, setFilterOrder] = useState<FilterField[]>(() => normalizeOrder(readStorage(FILTER_ORDER_KEY, DEFAULT_FILTER_ORDER), DEFAULT_FILTER_ORDER));
@@ -309,25 +314,27 @@ export function SkuOverviewPage({ rows, upload, visibleMetrics = ['leads', 'clos
     );
   }
 
+  const renderFilters = () => (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} autoScroll={false} onDragEnd={onFilterDragEnd}>
+      <SortableContext items={filterOrder} strategy={rectSortingStrategy}>
+        <section className="sku-filters" aria-label="筛选器排序">
+          {filterOrder.map((field) => (
+            <SortableShell key={field} id={field} className="sku-filter-sortable" handleClassName="sku-filter-drag-handle">
+              {renderFilterMenu(field)}
+            </SortableShell>
+          ))}
+        </section>
+      </SortableContext>
+    </DndContext>
+  );
+
   return (
     <div className="sku-stack">
-      <DndContext sensors={sensors} collisionDetection={closestCenter} autoScroll={false} onDragEnd={onFilterDragEnd}>
-        <SortableContext items={filterOrder} strategy={rectSortingStrategy}>
-          <section className="sku-filters" aria-label="筛选器排序">
-            {filterOrder.map((field) => (
-              <SortableShell key={field} id={field} className="sku-filter-sortable" handleClassName="sku-filter-drag-handle">
-                {renderFilterMenu(field)}
-              </SortableShell>
-            ))}
-          </section>
-        </SortableContext>
-      </DndContext>
-
       <DndContext sensors={sensors} collisionDetection={closestCenter} autoScroll onDragEnd={onTopSectionDragEnd}>
         <SortableContext items={topSectionOrder} strategy={rectSortingStrategy}>
           {topSectionOrder.map((key) => (
             <SortableShell key={key} id={key} className={`sku-top-sortable sku-top-sortable-${key}`} handleClassName="sku-section-drag-handle">
-              {key === 'periodSummary' ? renderPeriodSummary() : renderMetricCards()}
+              {key === 'filters' ? renderFilters() : key === 'periodSummary' ? renderPeriodSummary() : renderMetricCards()}
             </SortableShell>
           ))}
         </SortableContext>
